@@ -3,15 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UNO - Fun Edition</title>
+  <title>UNO - Ultimate Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@400;600;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #fff5f5;
-      --bg-secondary: #fff0e6;
       --fg: #1a1a2e;
-      --muted: #666;
       --accent: #ff3366;
       --card-width: 80px;
       --card-height: 120px;
@@ -33,7 +31,6 @@
       user-select: none;
     }
 
-    /* Scrollbar */
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: rgba(255,255,255,0.3); border-radius: 10px; }
     ::-webkit-scrollbar-thumb { background: var(--uno-red); border-radius: 10px; }
@@ -45,7 +42,7 @@
       border-radius: 12px;
       position: relative;
       cursor: pointer;
-      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       box-shadow: 0 8px 25px rgba(0,0,0,0.2);
       display: flex;
       align-items: center;
@@ -109,26 +106,36 @@
       text-shadow: none;
     }
 
-    .uno-card:not(.disabled):not(.bot-card):hover {
-      transform: translateY(-30px) scale(1.1) rotateX(5deg);
-      z-index: 100;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    }
-
-    .uno-card.disabled {
-      filter: brightness(0.6) saturate(0.5);
-      cursor: not-allowed;
-      transform: scale(0.95);
-    }
-
+    /* Playable Card - Highlighted */
     .uno-card.playable {
-      box-shadow: 0 0 25px rgba(255, 255, 100, 0.9), 0 8px 25px rgba(0,0,0,0.2);
+      transform: translateY(-45px) scale(1.15) rotateX(5deg);
+      z-index: 100;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.4), 0 0 40px rgba(255, 255, 100, 1);
       animation: glow-pulse 1.2s infinite alternate;
+    }
+
+    /* Non-playable Card - Dimmed */
+    .uno-card.disabled {
+      filter: grayscale(80%) brightness(0.5);
+      cursor: not-allowed;
+      transform: scale(0.85) translateY(10px);
+      opacity: 0.5;
+    }
+
+    /* Stack Card - Special Highlight */
+    .uno-card.stackable {
+      box-shadow: 0 0 50px rgba(255, 100, 100, 1), 0 0 80px rgba(255, 50, 50, 0.8);
+      animation: stack-glow 0.8s infinite alternate;
     }
 
     @keyframes glow-pulse {
       from { box-shadow: 0 0 10px rgba(255, 255, 100, 0.6); }
-      to { box-shadow: 0 0 35px rgba(255, 255, 100, 1); }
+      to { box-shadow: 0 0 40px rgba(255, 255, 100, 1); }
+    }
+
+    @keyframes stack-glow {
+      from { box-shadow: 0 0 30px rgba(255, 100, 100, 0.8); }
+      to { box-shadow: 0 0 60px rgba(255, 50, 50, 1); }
     }
 
     /* Layout */
@@ -154,7 +161,6 @@
       z-index: 0;
     }
 
-    /* Player Positions for 4 players */
     .game-table {
       position: relative;
       flex: 1;
@@ -186,12 +192,43 @@
       gap: 10px;
       border: 3px solid transparent;
       transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
     }
 
     .player-info.active {
       border-color: var(--uno-green);
       box-shadow: 0 0 20px rgba(6, 214, 160, 0.5);
       transform: scale(1.05);
+    }
+
+    /* Catchable State - for UNO penalty */
+    .player-info.catchable {
+      animation: catch-pulse 0.5s infinite alternate;
+      border-color: var(--uno-yellow);
+    }
+
+    .player-info.catchable::after {
+      content: 'CATCH!';
+      position: absolute;
+      top: -25px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--uno-red);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      animation: bounce-catch 0.3s infinite alternate;
+    }
+
+    @keyframes catch-pulse {
+      to { box-shadow: 0 0 30px rgba(255, 214, 10, 0.8); }
+    }
+
+    @keyframes bounce-catch {
+      to { transform: translateX(-50%) translateY(-5px); }
     }
 
     .player-avatar {
@@ -216,19 +253,14 @@
     }
 
     /* Bot Cards Display */
-    .bot-cards {
-      display: flex;
-      justify-content: center;
-    }
+    .bot-cards { display: flex; justify-content: center; }
 
     .bot-cards.horizontal .uno-card {
       margin: 0 -25px;
       transform: scale(0.5);
     }
 
-    .bot-cards.vertical {
-      flex-direction: column;
-    }
+    .bot-cards.vertical { flex-direction: column; }
 
     .bot-cards.vertical .uno-card {
       margin: -35px 0;
@@ -286,6 +318,29 @@
       transition: background 0.3s;
     }
 
+    /* Stack Indicator */
+    .stack-indicator {
+      position: absolute;
+      top: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--uno-red), #ff6b6b);
+      color: white;
+      padding: 10px 25px;
+      border-radius: 20px;
+      font-weight: 800;
+      font-size: 1.2rem;
+      box-shadow: 0 5px 20px rgba(230, 57, 70, 0.5);
+      animation: stack-bounce 0.5s ease-in-out;
+      z-index: 100;
+    }
+
+    @keyframes stack-bounce {
+      0% { transform: translateX(-50%) scale(0); }
+      50% { transform: translateX(-50%) scale(1.2); }
+      100% { transform: translateX(-50%) scale(1); }
+    }
+
     /* Player Hand */
     .player-hand-area {
       background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.95) 100%);
@@ -302,9 +357,7 @@
       gap: 5px;
     }
 
-    .hand-container .uno-card {
-      margin: 0 -15px;
-    }
+    .hand-container .uno-card { margin: 0 -15px; }
 
     /* UNO Button */
     .uno-btn-container {
@@ -337,8 +390,6 @@
       transform: scale(1);
       animation: bounce-uno 0.6s infinite;
     }
-
-    .big-uno-btn:active { transform: scale(0.9); }
 
     @keyframes bounce-uno {
       0%, 100% { transform: scale(1); }
@@ -373,6 +424,7 @@
     .notification.success { border-left-color: var(--uno-green); }
     .notification.warning { border-left-color: var(--uno-yellow); }
     .notification.info { border-left-color: var(--uno-blue); }
+    .notification.error { border-left-color: var(--uno-purple); }
 
     @keyframes slide-down {
       from { transform: translateY(-100px); opacity: 0; }
@@ -532,10 +584,7 @@
       box-shadow: 0 10px 40px rgba(0,0,0,0.1);
     }
 
-    .profile-card {
-      text-align: center;
-      padding: 30px 20px;
-    }
+    .profile-card { text-align: center; padding: 30px 20px; }
 
     .profile-avatar {
       width: 120px;
@@ -614,10 +663,6 @@
       font-size: 0.7rem;
       font-weight: 800;
       transform: rotate(45deg);
-    }
-
-    .prepare-section {
-      margin-top: 20px;
     }
 
     .prepare-item {
@@ -722,13 +767,6 @@
       box-shadow: 0 15px 40px rgba(6, 214, 160, 0.4);
     }
 
-    .start-game-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
     /* Animations */
     @keyframes deal-from-deck {
       0% { transform: translate(0, -200px) rotate(180deg) scale(0.5); opacity: 0; }
@@ -776,9 +814,7 @@
       margin-bottom: 30px;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .gacha-result {
       background: rgba(255,255,255,0.95);
@@ -805,18 +841,17 @@
       font-size: 3.5rem;
     }
 
+    /* Screen Management */
+    .screen { display: none; }
+    .screen.active { display: flex; }
+
     @media (max-width: 1024px) {
-      .lobby-container {
-        grid-template-columns: 1fr;
-      }
+      .lobby-container { grid-template-columns: 1fr; }
       .menu-logo { font-size: 8rem; }
     }
 
     @media (max-width: 640px) {
-      :root {
-        --card-width: 60px;
-        --card-height: 90px;
-      }
+      :root { --card-width: 60px; --card-height: 90px; }
       .card-value { font-size: 2.5rem; }
       .menu-logo { font-size: 5rem; }
       .mode-card { width: 100%; }
@@ -836,7 +871,7 @@
   </div>
 
   <!-- MAIN MENU SCREEN -->
-  <div id="menu-screen" class="menu-screen">
+  <div id="menu-screen" class="menu-screen screen active">
     <h1 class="menu-logo">UNO</h1>
     <p class="text-xl text-gray-600 mb-12 font-semibold relative z-10">Choose Your Game Mode</p>
     
@@ -868,7 +903,7 @@
   </div>
 
   <!-- LOBBY SCREEN -->
-  <div id="lobby-screen" class="lobby-screen hidden">
+  <div id="lobby-screen" class="lobby-screen screen">
     <div class="lobby-container">
       <!-- Left Panel - Profile -->
       <div class="lobby-panel profile-card">
@@ -898,21 +933,17 @@
 
       <!-- Center - Main Area -->
       <div class="main-lobby-area">
-        <!-- Mascot -->
         <div class="w-full max-w-md">
           <div class="mascot-display">
             <div class="mascot-img">🦄</div>
           </div>
         </div>
 
-        <!-- Room Preview -->
         <div class="room-preview">
           <h3 class="text-2xl font-bold text-center text-gray-800 mb-2" id="lobby-title">Solo Mode</h3>
           <p class="text-center text-gray-500 text-sm mb-4">Waiting for players...</p>
           
-          <div class="player-slots" id="player-slots">
-            <!-- Slots will be generated by JS -->
-          </div>
+          <div class="player-slots" id="player-slots"></div>
 
           <button id="start-game-btn" class="start-game-btn" onclick="startMatching()">
             Start Matching
@@ -920,7 +951,7 @@
         </div>
       </div>
 
-      <!-- Right Panel - Events & Prepare -->
+      <!-- Right Panel -->
       <div>
         <div class="lobby-panel mb-4">
           <h4 class="font-bold text-gray-700 mb-3">Events</h4>
@@ -938,9 +969,7 @@
           <h4 class="font-bold text-gray-700 mb-3">Prepare</h4>
           
           <div class="prepare-item">
-            <div class="prepare-icon" style="background: linear-gradient(135deg, var(--uno-yellow), #ffe066);">
-              🎨
-            </div>
+            <div class="prepare-icon" style="background: linear-gradient(135deg, var(--uno-yellow), #ffe066);">🎨</div>
             <div>
               <div class="font-semibold text-gray-700">Card Design</div>
               <div class="text-xs text-gray-500">Classic Theme</div>
@@ -948,29 +977,15 @@
           </div>
 
           <div class="prepare-item">
-            <div class="prepare-icon" style="background: linear-gradient(135deg, var(--uno-green), #69db7c);">
-              🎵
-            </div>
+            <div class="prepare-icon" style="background: linear-gradient(135deg, var(--uno-green), #69db7c);">🎵</div>
             <div>
               <div class="font-semibold text-gray-700">Sound FX</div>
               <div class="text-xs text-gray-500">Enabled</div>
             </div>
           </div>
 
-          <div class="prepare-item">
-            <div class="prepare-icon" style="background: linear-gradient(135deg, var(--uno-red), #ff6b6b);">
-              ⚡
-            </div>
-            <div>
-              <div class="font-semibold text-gray-700">Game Speed</div>
-              <div class="text-xs text-gray-500">Normal</div>
-            </div>
-          </div>
-
           <div class="prepare-item" onclick="backToMenu()">
-            <div class="prepare-icon" style="background: linear-gradient(135deg, #868e96, #adb5bd);">
-              ←
-            </div>
+            <div class="prepare-icon" style="background: linear-gradient(135deg, #868e96, #adb5bd);">←</div>
             <div>
               <div class="font-semibold text-gray-700">Back to Menu</div>
               <div class="text-xs text-gray-500">Change mode</div>
@@ -982,10 +997,8 @@
   </div>
 
   <!-- GAME SCREEN -->
-  <div id="game-app" class="hidden">
-    <div class="game-table" id="game-table">
-      <!-- Player zones will be generated by JS based on player count -->
-    </div>
+  <div id="game-app" class="screen">
+    <div class="game-table" id="game-table"></div>
 
     <div class="center-play-area" id="center-play-area">
       <div class="deck-pile" id="draw-pile" title="Draw Card (D)">
@@ -1051,7 +1064,8 @@
         win: { type: 'sine', freq: [523.25, 659.25, 783.99], dur: 0.8, vol: 0.1 },
         lose: { type: 'sawtooth', freq: [200, 100], dur: 0.5, vol: 0.08 },
         draw: { type: 'sine', freq: [400, 400], dur: 0.04, vol: 0.04 },
-        notification: { type: 'sine', freq: [800, 1000], dur: 0.15, vol: 0.06 }
+        notification: { type: 'sine', freq: [800, 1000], dur: 0.15, vol: 0.06 },
+        catch: { type: 'square', freq: [200, 500, 200], dur: 0.3, vol: 0.1 }
       };
       
       const s = sounds[type];
@@ -1082,21 +1096,13 @@
       const notif = document.createElement('div');
       notif.className = `notification ${type}`;
       
-      const icons = {
-        info: '📢',
-        success: '✅',
-        warning: '⚠️',
-        error: '❌'
-      };
+      const icons = { info: '📢', success: '✅', warning: '⚠️', error: '❌' };
       
       notif.innerHTML = `<span class="text-xl">${icons[type] || '📢'}</span><span>${message}</span>`;
       container.appendChild(notif);
       
       playSound('notification');
-      
-      setTimeout(() => {
-        notif.remove();
-      }, 3000);
+      setTimeout(() => notif.remove(), 3000);
     }
 
     // ==========================
@@ -1110,7 +1116,7 @@
     const BOT_AVATARS = ['😎', '🤖', '🎭', '👾', '🦊', '🐱', '🦁', '🐸'];
     const TEAM_COLORS = ['#e63946', '#4361ee'];
 
-    let gameMode = 'solo'; // 'solo' or '2v2'
+    let gameMode = 'solo';
     let state = {
       deck: [], 
       discard: [], 
@@ -1122,8 +1128,19 @@
       active: false,
       saidUno: false,
       pendingWild: null,
-      teams: [] // For 2v2 mode
+      teams: [],
+      drawStack: 0,
+      vulnerablePlayer: null,
+      stackType: null
     };
+
+    // ==========================
+    // --- SPA NAVIGATION ---
+    // ==========================
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+    }
 
     // ==========================
     // --- DECK & UTILITIES ---
@@ -1172,9 +1189,6 @@
       let sym = card.v;
       if (sym === 'S') sym = '⊘'; 
       if (sym === 'R') sym = '⟲'; 
-      if (sym === '+2') sym = '+2';
-      if (sym === '+4') sym = '+4';
-      if (sym === 'W') sym = 'W';
       
       if (!isBack) el.innerHTML = `<span class="card-value">${sym}</span>`;
       return el;
@@ -1199,12 +1213,26 @@
       };
       colorIndicator.style.background = cmap[state.activeColor] || 'transparent';
 
-      // Update UNO button visibility
+      // UNO button
       const unoBtn = document.getElementById('uno-btn');
-      if (state.turn === 0 && state.players[0].hand.length === 2 && state.active) {
+      if (state.turn === 0 && state.players[0].hand.length === 2 && state.active && !state.saidUno) {
         unoBtn.classList.add('active');
       } else {
         unoBtn.classList.remove('active');
+      }
+
+      // Stack indicator
+      const centerArea = document.getElementById('center-play-area');
+      let stackInd = centerArea.querySelector('.stack-indicator');
+      if (state.drawStack > 0) {
+        if (!stackInd) {
+          stackInd = document.createElement('div');
+          stackInd.className = 'stack-indicator';
+          centerArea.appendChild(stackInd);
+        }
+        stackInd.textContent = `STACK: +${state.drawStack}`;
+      } else if (stackInd) {
+        stackInd.remove();
       }
     }
 
@@ -1216,9 +1244,27 @@
 
       me.hand.forEach((card, idx) => {
         const el = renderCard(card);
-        const valid = isMyTurn && checkValidPlay(card);
-        if (valid) el.classList.add('playable');
-        else if (!isMyTurn) el.classList.add('disabled');
+        let valid = false;
+        let isStackCard = false;
+
+        if (isMyTurn) {
+          if (state.drawStack > 0) {
+            // Must play stack card
+            if (canStackCard(card)) {
+              valid = true;
+              isStackCard = true;
+            }
+          } else {
+            valid = checkValidPlay(card);
+          }
+        }
+
+        if (valid) {
+          el.classList.add('playable');
+          if (isStackCard) el.classList.add('stackable');
+        } else if (!isMyTurn || state.drawStack > 0) {
+          el.classList.add('disabled');
+        }
 
         el.onclick = () => {
           if (valid) executePlayerTurn(idx);
@@ -1235,14 +1281,20 @@
       const positions = getPlayerPositions(playerCount);
 
       state.players.forEach((player, idx) => {
-        if (idx === 0) return; // Skip main player (rendered separately)
+        if (idx === 0) return;
 
         const zone = document.createElement('div');
         zone.className = `player-zone ${positions[idx]}`;
 
-        // Player info
         const info = document.createElement('div');
         info.className = `player-info ${state.turn === idx ? 'active' : ''}`;
+        
+        // Check if this player is vulnerable (has 1 card and didn't say UNO)
+        const isVulnerable = state.vulnerablePlayer === idx;
+        if (isVulnerable) {
+          info.classList.add('catchable');
+        }
+        
         if (gameMode === '2v2' && state.teams[idx] !== undefined) {
           info.style.borderColor = TEAM_COLORS[state.teams[idx]];
         }
@@ -1255,9 +1307,14 @@
           </div>
         `;
         
+        // Click to catch UNO
+        if (isVulnerable && state.turn === 0) {
+          info.onclick = () => catchUno(idx);
+          info.style.cursor = 'pointer';
+        }
+        
         zone.appendChild(info);
 
-        // Cards
         const cardsDiv = document.createElement('div');
         cardsDiv.className = `bot-cards ${positions[idx] === 'left' || positions[idx] === 'right' ? 'vertical' : 'horizontal'}`;
         
@@ -1272,15 +1329,15 @@
         gameTable.appendChild(zone);
       });
 
-      // Render main player zone (bottom)
+      // Main player zone
       const mainZone = document.createElement('div');
       mainZone.className = 'player-zone bottom';
       
       const mainInfo = document.createElement('div');
       mainInfo.className = `player-info ${state.turn === 0 ? 'active' : ''}`;
-      if (gameMode === '2v2') {
-        mainInfo.style.borderColor = TEAM_COLORS[state.teams[0]];
-      }
+      if (state.vulnerablePlayer === 0) mainInfo.classList.add('catchable');
+      if (gameMode === '2v2') mainInfo.style.borderColor = TEAM_COLORS[state.teams[0]];
+      
       mainInfo.innerHTML = `
         <div class="player-avatar" style="background: ${getPlayerColor(0)}">${state.players[0].avatar}</div>
         <div>
@@ -1316,6 +1373,15 @@
       return false;
     }
 
+    function canStackCard(card) {
+      if (state.stackType === '+2') {
+        return card.v === '+2';
+      } else if (state.stackType === '+4') {
+        return card.v === '+4';
+      }
+      return false;
+    }
+
     function drawCards(count = 1) {
       let drawn = [];
       for(let i = 0; i < count; i++) {
@@ -1334,28 +1400,51 @@
       const player = state.players[pIdx];
       const card = player.hand.splice(cIdx, 1)[0];
       state.discard.push(card);
+      state.vulnerablePlayer = null;
       
       playSound('card');
 
+      // Handle stacking
+      if (card.v === '+2') {
+        state.drawStack += 2;
+        state.stackType = '+2';
+      } else if (card.v === '+4') {
+        state.drawStack += 4;
+        state.stackType = '+4';
+      }
+
+      // Check win
       if (player.hand.length === 0) {
+        if (pIdx === 0 && !state.saidUno) {
+          // Invalid win - forgot UNO
+          player.hand.push(...drawCards(4));
+          showNotification('Invalid win! You forgot UNO! Drew 4 cards.', 'error');
+          renderHand();
+          updateUI();
+          return;
+        }
         setTimeout(() => endGame(pIdx), 500);
         updateUI();
         renderHand();
         return;
       }
 
+      // Set vulnerable if has 1 card
+      if (player.hand.length === 1) {
+        state.vulnerablePlayer = pIdx;
+        if (pIdx !== 0) {
+          showNotification(`${player.name} has 1 card! Click to catch!`, 'warning');
+        }
+      }
+
       // Bot auto UNO
       if (pIdx !== 0 && player.hand.length === 1) {
+        // Bot says UNO automatically
         showNotification(`${player.name} says UNO!`, 'warning');
+        state.vulnerablePlayer = null;
       }
 
-      // Player forgot UNO - penalty handled silently
-      if (pIdx === 0 && player.hand.length === 1 && !state.saidUno) {
-        player.hand.push(...drawCards(2));
-        showNotification('You forgot to call UNO! Drew 2 cards.', 'warning');
-        renderHand();
-      }
-
+      // Handle wild
       if (card.c === 'black') {
         if (pIdx === 0) {
           state.pendingWild = card;
@@ -1370,6 +1459,22 @@
       }
 
       applyCardEffect(card, pIdx);
+      
+      // Check if next player must draw stack
+      const nextIdx = getNextPlayerIdx();
+      const nextPlayer = state.players[nextIdx];
+      const canStack = nextPlayer.hand.some(c => canStackCard(c));
+      
+      if (state.drawStack > 0 && !canStack) {
+        // Force draw
+        const drawn = drawCards(state.drawStack);
+        nextPlayer.hand.push(...drawn);
+        showNotification(`${nextPlayer.name} drew ${state.drawStack} cards!`, 'error');
+        state.drawStack = 0;
+        state.stackType = null;
+        state.turn = nextIdx; // Skip their turn
+      }
+
       advanceTurn();
     }
 
@@ -1377,28 +1482,19 @@
       const victimIdx = getNextPlayerIdx();
       const victim = state.players[victimIdx];
       
-      switch(card.v) {
-        case 'S':
-          showNotification(`${victim.name} was skipped!`, 'info');
-          state.turn = victimIdx;
-          break;
-        case 'R':
-          state.dir *= -1;
-          showNotification('Direction reversed!', 'info');
-          if (state.players.length === 2) state.turn = victimIdx;
-          break;
-        case '+2':
-          const drawn2 = drawCards(2);
-          victim.hand.push(...drawn2);
-          showNotification(`${victim.name} drew 2 cards!`, 'warning');
-          state.turn = victimIdx;
-          break;
-        case '+4':
-          const drawn4 = drawCards(4);
-          victim.hand.push(...drawn4);
-          showNotification(`${victim.name} drew 4 cards!`, 'error');
-          state.turn = victimIdx;
-          break;
+      // Only apply skip effects if not stacking
+      if (state.drawStack === 0) {
+        switch(card.v) {
+          case 'S':
+            showNotification(`${victim.name} was skipped!`, 'info');
+            state.turn = victimIdx;
+            break;
+          case 'R':
+            state.dir *= -1;
+            showNotification('Direction reversed!', 'info');
+            if (state.players.length === 2) state.turn = victimIdx;
+            break;
+        }
       }
     }
 
@@ -1422,6 +1518,21 @@
       }
     }
 
+    function catchUno(playerIdx) {
+      if (state.vulnerablePlayer !== playerIdx) return;
+      if (state.turn !== 0) return; // Only player can catch
+      
+      playSound('catch');
+      
+      const victim = state.players[playerIdx];
+      victim.hand.push(...drawCards(2));
+      showNotification(`Caught ${victim.name}! They drew 2 cards!`, 'success');
+      
+      state.vulnerablePlayer = null;
+      renderGameTable();
+      renderHand();
+    }
+
     // ==========================
     // --- BOT AI ---
     // ==========================
@@ -1429,8 +1540,36 @@
       if (state.isOver || !state.active) return;
       
       const p = state.players[state.turn];
-      let validMoves = [];
+      
+      // Check if bot can catch player's UNO
+      if (state.vulnerablePlayer === 0) {
+        // Random chance to catch
+        if (Math.random() > 0.5) {
+          catchUno(0);
+        }
+      }
+      
+      // Bot must handle stack
+      if (state.drawStack > 0) {
+        const stackCardIdx = p.hand.findIndex(c => canStackCard(c));
+        if (stackCardIdx !== -1) {
+          showNotification(`${p.name} stacks!`, 'warning');
+          playCard(state.turn, stackCardIdx);
+          return;
+        } else {
+          // Must draw
+          const drawn = drawCards(state.drawStack);
+          p.hand.push(...drawn);
+          showNotification(`${p.name} drew ${state.drawStack} cards!`, 'error');
+          playSound('draw');
+          state.drawStack = 0;
+          state.stackType = null;
+          advanceTurn();
+          return;
+        }
+      }
 
+      let validMoves = [];
       p.hand.forEach((card, index) => {
         if(checkValidPlay(card)) validMoves.push({card, index});
       });
@@ -1459,7 +1598,7 @@
 
     function getCardPriority(card) {
       if(card.v === '+4') return 100;
-      if(card.v === '+2') return 80;
+      if(card.v === '+2') return 90;
       if(card.v === 'S' || card.v === 'R') return 50;
       if(card.c !== 'black') return 20;
       return 10;
@@ -1483,8 +1622,7 @@
       document.querySelector(`[data-mode="${mode}"]`).classList.add('selected');
       
       setTimeout(() => {
-        document.getElementById('menu-screen').classList.add('hidden');
-        document.getElementById('lobby-screen').classList.remove('hidden');
+        showScreen('lobby-screen');
         setupLobby();
       }, 300);
     }
@@ -1497,61 +1635,33 @@
       
       if (gameMode === 'solo') {
         lobbyTitle.textContent = 'Solo Mode - 1 vs 3';
-        
-        // Player slot
         slotsContainer.innerHTML = `
           <div class="player-slot occupied">
             <div class="slot-avatar">😊</div>
             <div class="font-semibold text-gray-700">You</div>
             <div class="text-xs text-green-600">Ready</div>
           </div>
-          <div class="player-slot">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Bot 1</div>
-            <div class="text-xs text-gray-400">Waiting...</div>
-          </div>
-          <div class="player-slot">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Bot 2</div>
-            <div class="text-xs text-gray-400">Waiting...</div>
-          </div>
-          <div class="player-slot">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Bot 3</div>
-            <div class="text-xs text-gray-400">Waiting...</div>
-          </div>
+          <div class="player-slot"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Bot 1</div></div>
+          <div class="player-slot"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Bot 2</div></div>
+          <div class="player-slot"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Bot 3</div></div>
         `;
       } else {
         lobbyTitle.textContent = '2v2 Team Mode';
-        
         slotsContainer.innerHTML = `
           <div class="player-slot occupied">
             <div class="slot-avatar" style="border: 3px solid ${TEAM_COLORS[0]}">😊</div>
             <div class="font-semibold text-gray-700">You</div>
             <div class="text-xs" style="color: ${TEAM_COLORS[0]}">Team A</div>
           </div>
-          <div class="player-slot">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Partner</div>
-            <div class="text-xs text-gray-400">Waiting...</div>
-          </div>
-          <div class="player-slot enemy">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Enemy 1</div>
-            <div class="text-xs" style="color: ${TEAM_COLORS[1]}">Team B</div>
-          </div>
-          <div class="player-slot enemy">
-            <div class="slot-avatar">❓</div>
-            <div class="font-semibold text-gray-400">Enemy 2</div>
-            <div class="text-xs" style="color: ${TEAM_COLORS[1]}">Team B</div>
-          </div>
+          <div class="player-slot"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Partner</div></div>
+          <div class="player-slot enemy"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Enemy 1</div></div>
+          <div class="player-slot enemy"><div class="slot-avatar">❓</div><div class="font-semibold text-gray-400">Enemy 2</div></div>
         `;
       }
     }
 
     function backToMenu() {
-      document.getElementById('lobby-screen').classList.add('hidden');
-      document.getElementById('menu-screen').classList.remove('hidden');
+      showScreen('menu-screen');
     }
 
     async function startMatching() {
@@ -1563,20 +1673,13 @@
       
       await sleep(2000);
       
-      // Generate opponents
       const opponents = [];
       if (gameMode === 'solo') {
-        for (let i = 0; i < 3; i++) {
-          opponents.push(getRandomBot());
-        }
+        for (let i = 0; i < 3; i++) opponents.push(getRandomBot());
       } else {
-        // Partner + 2 enemies
-        for (let i = 0; i < 3; i++) {
-          opponents.push(getRandomBot());
-        }
+        for (let i = 0; i < 3; i++) opponents.push(getRandomBot());
       }
       
-      // Show results
       let resultHTML = '<div class="text-xl font-bold text-gray-700 mb-4">Match Found!</div><div class="flex gap-4 flex-wrap justify-center">';
       
       opponents.forEach((bot, i) => {
@@ -1610,7 +1713,6 @@
       
       const pName = document.getElementById('player-name-input').value || 'Player';
       
-      // Setup players
       state = {
         deck: createDeck(),
         discard: [],
@@ -1626,10 +1728,12 @@
         active: true,
         saidUno: false,
         pendingWild: null,
-        teams: gameMode === '2v2' ? [0] : []
+        teams: gameMode === '2v2' ? [0] : [],
+        drawStack: 0,
+        stackType: null,
+        vulnerablePlayer: null
       };
       
-      // Add opponents
       opponents.forEach((bot, i) => {
         state.players.push({
           name: bot.name,
@@ -1637,18 +1741,11 @@
           hand: [],
           isBot: true
         });
-        
-        if (gameMode === '2v2') {
-          // First opponent is partner (team 0), others are enemies (team 1)
-          state.teams.push(i === 0 ? 0 : 1);
-        }
+        if (gameMode === '2v2') state.teams.push(i === 0 ? 0 : 1);
       });
 
-      // Switch screens
-      document.getElementById('lobby-screen').classList.add('hidden');
-      document.getElementById('game-app').classList.remove('hidden');
+      showScreen('game-app');
 
-      // Deal cards with animation
       for(let i = 0; i < 7; i++) {
         for(let p of state.players) {
           p.hand.push(drawCards()[0]);
@@ -1660,7 +1757,6 @@
         }
       }
 
-      // Start discard pile
       let startCard = drawCards()[0];
       while(startCard.c === 'black' || SPECIAL_VALUES.includes(startCard.v)) {
         state.deck.unshift(startCard);
@@ -1716,21 +1812,34 @@
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btn-restart').addEventListener('click', () => {
         document.getElementById('game-over').classList.remove('active');
-        document.getElementById('game-app').classList.add('hidden');
-        document.getElementById('lobby-screen').classList.remove('hidden');
+        showScreen('lobby-screen');
         setupLobby();
       });
       
       document.getElementById('btn-lobby').addEventListener('click', () => {
         document.getElementById('game-over').classList.remove('active');
-        document.getElementById('game-app').classList.add('hidden');
-        document.getElementById('lobby-screen').classList.remove('hidden');
+        showScreen('lobby-screen');
         setupLobby();
       });
 
       document.getElementById('draw-pile').addEventListener('click', () => {
         if (state.turn !== 0 || state.isOver || !state.active) return;
         
+        // If stack exists, must draw all
+        if (state.drawStack > 0) {
+          const drawn = drawCards(state.drawStack);
+          state.players[0].hand.push(...drawn);
+          playSound('draw');
+          showNotification(`You drew ${state.drawStack} cards!`, 'error');
+          state.drawStack = 0;
+          state.stackType = null;
+          renderHand();
+          updateUI();
+          advanceTurn();
+          return;
+        }
+        
+        // Normal draw
         const drawn = drawCards(1);
         if (drawn.length > 0) {
           state.players[0].hand.push(...drawn);
@@ -1751,8 +1860,10 @@
       document.getElementById('uno-btn').addEventListener('click', () => {
         if (state.turn === 0 && state.players[0].hand.length === 2) {
           state.saidUno = true;
+          state.vulnerablePlayer = null;
           document.getElementById('uno-btn').classList.remove('active');
           showNotification('UNO called!', 'success');
+          renderGameTable();
         }
       });
 
@@ -1770,7 +1881,6 @@
         });
       });
 
-      // Keyboard shortcuts
       document.addEventListener('keydown', e => {
         if (state.isOver || !state.active) return;
         if (e.key === 'u' || e.key === 'U') document.getElementById('uno-btn').click();
