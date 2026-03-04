@@ -705,7 +705,8 @@
       
       if (playable.length > 0) {
         playable.sort((a, b) => {
-            let score = (card) => (card.v === '+4' ? 10 : (card.v === '+2' ? 8 : (card.v === 'S' || card.v === 'R' ? 6 : (card.c !== 'black' ? 4 : 2)));
+            // FIX: Added missing closing parenthesis at the end of this line
+            let score = (card) => (card.v === '+4' ? 10 : (card.v === '+2' ? 8 : (card.v === 'S' || card.v === 'R' ? 6 : (card.c !== 'black' ? 4 : 2))));
             return score(b.c) - score(a.c);
         });
         
@@ -732,7 +733,6 @@
     async function startGame() {
       initAudio();
       
-      // Robust parsing of bot count
       const botCountEl = $('bot-count');
       const botCount = parseInt(botCountEl.innerText.trim(), 10) || 3; 
       
@@ -745,12 +745,10 @@
         turn: 0, dir: 1, isOver: false, active: true, saidUno: false, isDealing: true
       };
       
-      // Add bots
       for(let i=0; i<botCount; i++) {
           state.players.push({name: `Bot ${i+1}`, hand: [], isBot: true});
       }
 
-      // UI Switch
       $lobby.classList.add('hidden');
       $game.classList.remove('hidden');
       $('player-name-display').innerText = pName;
@@ -795,10 +793,8 @@
 
     // --- Event Listeners ---
     document.addEventListener('DOMContentLoaded', () => {
-        // Start Button
         $('btn-start').addEventListener('click', startGame);
 
-        // Restart/Lobby Buttons
         $('btn-restart').addEventListener('click', () => {
             $gameOver.classList.remove('active'); 
             startGame();
@@ -809,7 +805,6 @@
             $gameOver.classList.remove('active');
         });
 
-        // Bot Count Buttons
         $('btn-bot-plus').addEventListener('click', () => {
             let v = parseInt($('bot-count').innerText);
             if(v < 5) $('bot-count').innerText = v+1;
@@ -820,7 +815,6 @@
             if(v > 1) $('bot-count').innerText = v-1;
         });
 
-        // Draw Pile
         $draw.addEventListener('click', () => {
           if (state.turn !== 0 || state.isOver || !state.active) return;
           state.players[0].hand.push(...drawCard(1));
@@ -828,7 +822,6 @@
           nextTurn();
         });
 
-        // UNO Button
         $unoBtn.addEventListener('click', () => {
           state.saidUno = true;
           $unoBtn.classList.remove('active');
@@ -836,7 +829,6 @@
           setTimeout(() => $unoBtn.style.background = '', 300);
         });
 
-        // Color Picker Logic
         document.querySelectorAll('.color-btn').forEach(b => {
           b.addEventListener('click', () => {
             state.color = b.dataset.color;
@@ -848,7 +840,6 @@
         });
     });
 
-    // Keyboard Shortcuts
     document.addEventListener('keydown', e => {
       if (state.isOver || !state.active) return;
       if (e.key === 'u' || e.key === 'U') $unoBtn.click();
