@@ -249,6 +249,63 @@ function showEmote(playerIndex, emote) {
   }, 2000);
 }
 
+// ==================== FULLSCREEN FUNCTIONS ====================
+function enterFullscreen() {
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen();
+  } else if (elem.webkitRequestFullscreen) {
+    elem.webkitRequestFullscreen();
+  } else if (elem.msRequestFullscreen) {
+    elem.msRequestFullscreen();
+  }
+  
+  // Try to lock orientation to landscape
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {});
+  }
+}
+
+function exitFullscreen() {
+  if (document.exitFullscreen) {
+    document.exitFullscreen();
+  } else if (document.webkitExitFullscreen) {
+    document.webkitExitFullscreen();
+  } else if (document.msExitFullscreen) {
+    document.msExitFullscreen();
+  }
+  
+  // Unlock orientation
+  if (screen.orientation && screen.orientation.unlock) {
+    screen.orientation.unlock();
+  }
+}
+
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+}
+
+// ==================== LANDSCAPE PROMPT ====================
+function checkScreenOrientation() {
+  const prompt = document.getElementById('landscape-prompt');
+  const isMobile = window.innerWidth <= 640;
+  const isPortrait = window.innerHeight > window.innerWidth;
+  
+  if (isMobile && isPortrait && !isFullscreen()) {
+    if (prompt && document.getElementById('game-app').classList.contains('active')) {
+      prompt.classList.add('show');
+    }
+  } else {
+    if (prompt) prompt.classList.remove('show');
+  }
+}
+
+function activateLandscape() {
+  enterFullscreen();
+  const prompt = document.getElementById('landscape-prompt');
+  if (prompt) prompt.classList.remove('show');
+}
+
 // Deck Creation
 function createDeck() {
   let deck = [];
@@ -279,22 +336,19 @@ function renderCard(card, isBack = false) {
 
   if (isBack) {
     el.classList.add('card-back');
+    const randId = Math.random().toString(36).substr(2, 9);
     el.innerHTML = `
       <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
          <defs>
-          <linearGradient id="unoRedLocal${Math.random()}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id="unoRedLocal${randId}" x1="0%" y1="0%" x2="100%" y2="100%">
            <stop offset="0%" stop-color="#FF1744"/>
            <stop offset="100%" stop-color="#D50000"/>
-          </linearGradient>
-          <linearGradient id="unoYellowLocal${Math.random()}" x1="0%" y1="0%" x2="0%" y2="100%">
-           <stop offset="0%" stop-color="#FFEB3B"/>
-           <stop offset="100%" stop-color="#FBC02D"/>
           </linearGradient>
          </defs>
          <g>
           <rect width="240" height="360" rx="18" fill="#2d2d44"/>
           <rect x="10" y="10" width="220" height="340" rx="12" fill="none" stroke="#ffffff" stroke-width="8"/>
-          <ellipse cx="120" cy="180" rx="80" ry="140" fill="url(#unoRedLocal${Math.random()})" transform="rotate(20 120 180)"/>
+          <ellipse cx="120" cy="180" rx="80" ry="140" fill="url(#unoRedLocal${randId})" transform="rotate(20 120 180)"/>
           <text x="120" y="195" font-family="Arial Black, sans-serif" font-size="65" font-weight="900" fill="#ffd700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-15 120 190)">UNO</text>
          </g>
         </svg>`;
@@ -432,7 +486,6 @@ function updateTurnIndicator() {
   const indicator = document.getElementById('turn-indicator');
   const turnText = document.getElementById('turn-text');
   const dot = indicator ? indicator.querySelector('.dot') : null;
-  const playerTimer = document.getElementById('player-turn-timer');
   
   if (!indicator) return;
   
@@ -445,13 +498,6 @@ function updateTurnIndicator() {
     } else {
       turnText.textContent = currentPlayer?.name + "'s Turn";
       if (dot) dot.style.background = getPlayerColor(state.turn);
-    }
-    
-    if (playerTimer) {
-      playerTimer.textContent = state.timer + 's';
-      playerTimer.classList.remove('warning', 'danger');
-      if (state.timer <= 3) playerTimer.classList.add('danger');
-      else if (state.timer <= 5) playerTimer.classList.add('warning');
     }
   } else {
     indicator.style.display = 'none';
@@ -478,6 +524,24 @@ function updatePlayerZones() {
         if (state.timer <= 3 && gameSettings.timer) {
           info.classList.add('warning');
         }
+      }
+    }
+    
+    // Update player timer
+    let timerEl = info?.querySelector('.player-turn-timer');
+    if (!timerEl && info) {
+      timerEl = document.createElement('div');
+      timerEl.className = 'player-turn-timer';
+      info.appendChild(timerEl);
+    }
+    
+    if (timerEl) {
+      timerEl.classList.remove('show', 'warning', 'danger');
+      if (state.turn === idx && state.active && !state.isOver) {
+        timerEl.textContent = state.timer;
+        timerEl.classList.add('show');
+        if (state.timer <= 3) timerEl.classList.add('danger');
+        else if (state.timer <= 5) timerEl.classList.add('warning');
       }
     }
     
@@ -620,6 +684,68 @@ function renderHand() {
 }
 
 // ==========================================
+// ACTION CARD EFFECTS
+// ==========================================
+function showActionFlash(type, color = null) {
+  let overlay = document.getElementById('action-flash-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'action-flash-overlay';
+    overlay.className = 'action-flash-overlay';
+    document.body.appendChild(overlay);
+  }
+  
+  overlay.className = 'action-flash-overlay ' + type;
+  
+  // Force reflow
+  void overlay.offsetWidth;
+  
+  overlay.classList.add('active');
+  
+  setTimeout(() => {
+    overlay.classList.remove('active');
+  }, 500);
+}
+
+function showSkipSymbol(playerIndex) {
+  const zone = document.querySelector('.player-zone.player-' + getPositionClass(playerIndex));
+  if (!zone) return;
+  
+  let skipSymbol = zone.querySelector('.skip-symbol');
+  if (!skipSymbol) {
+    skipSymbol = document.createElement('div');
+    skipSymbol.className = 'skip-symbol';
+    skipSymbol.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/></svg>`;
+    zone.appendChild(skipSymbol);
+  }
+  
+  skipSymbol.classList.add('show');
+  
+  setTimeout(() => {
+    skipSymbol.classList.remove('show');
+  }, 1200);
+}
+
+function showReverseSymbol() {
+  let reverseSymbol = document.getElementById('reverse-symbol');
+  if (!reverseSymbol) {
+    reverseSymbol = document.createElement('div');
+    reverseSymbol.id = 'reverse-symbol';
+    reverseSymbol.className = 'reverse-symbol';
+    reverseSymbol.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>`;
+    document.body.appendChild(reverseSymbol);
+  }
+  
+  reverseSymbol.classList.remove('show');
+  void reverseSymbol.offsetWidth;
+  reverseSymbol.classList.add('show');
+  
+  setTimeout(() => {
+    reverseSymbol.classList.remove('show');
+  }, 800);
+}
+
+// ==========================================
 // FUNGSI YANG HILANG (FIX)
 // ==========================================
 async function executePlayerTurn(cardIndex) {
@@ -633,12 +759,10 @@ function startTimer() {
   if (!gameSettings.timer) return;
   stopTimer();
   state.timer = TURN_TIME;
-  updateTurnIndicator();
   updatePlayerZones();
   
   state.timerInterval = setInterval(() => {
     state.timer--;
-    updateTurnIndicator();
     updatePlayerZones();
     
     if (state.timer <= 3 && state.timer > 0) {
@@ -871,14 +995,25 @@ async function playCard(playerIndex, cardIndex) {
   }
   state.lastPlayTime = now;
   
+  // Show action effects
   if (card.v === 'S') {
     playSound('skip');
     shakeTable();
+    showActionFlash('skip');
+    const skippedPlayerIdx = getNextPlayerIndex();
+    setTimeout(() => showSkipSymbol(skippedPlayerIdx), 200);
   } else if (card.v === 'R') {
     playSound('reverse');
     shakeTable();
+    showActionFlash('reverse');
+    showReverseSymbol();
+  } else if (card.v === '+2') {
+    playSound('card');
+    showActionFlash('plus');
+    shakeTable();
   } else if (card.v === 'W' || card.v === '+4') {
     playSound('wild');
+    showActionFlash('wild');
   } else {
     playSound('card');
   }
@@ -1270,6 +1405,10 @@ function cancelMatchmaking() {
 
 async function startMatch() {
   initAudio();
+  
+  // Enter fullscreen when starting game
+  enterFullscreen();
+  
   showScreen('game-app');
   await initGame();
 }
@@ -1388,6 +1527,9 @@ function endGame(winnerIndex, isTimeUp) {
   stopTimer();
   stopGameTimer();
   
+  // Exit fullscreen when game ends
+  exitFullscreen();
+  
   const isWin = winnerIndex === 0;
   
   if (isWin) {
@@ -1415,7 +1557,7 @@ function endGame(winnerIndex, isTimeUp) {
     isWinner: idx === winnerIndex
   })).sort((a, b) => a.cards - b.cards);
   
-    const resultsContainer = document.getElementById('results-container');
+  const resultsContainer = document.getElementById('results-container');
   if (resultsContainer) {
     resultsContainer.innerHTML = results.map((r, i) => 
       '<div class="flex items-center gap-3 p-2 rounded-xl mb-2" style="background: ' + (r.isWinner ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255,255,255,0.03)') + '">' +
@@ -1431,24 +1573,15 @@ function endGame(winnerIndex, isTimeUp) {
   if (gameOver) gameOver.classList.add('active');
 }
 
-// Render Game Table (Not strictly needed if HTML is static, but useful for dynamic)
-function renderGameTable() {
-  const gameTable = document.getElementById('game-table');
-  if (!gameTable) return;
-  
-  // Remove existing zones if dynamic
-  // gameTable.querySelectorAll('.player-zone').forEach(z => z.remove());
-  
-  // Implementation depends on whether you want JS to create zones or HTML holds them.
-  // Given the provided HTML has static zones, we rely on updatePlayerZones.
-}
-
 // ==========================================
 // EVENT LISTENERS
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
   runLoadingScreen();
+  
+  // Check screen orientation on game screen
+  setInterval(checkScreenOrientation, 1000);
   
   // Theme card clicks
   document.querySelectorAll('.theme-card').forEach(card => {
@@ -1613,4 +1746,17 @@ document.addEventListener('DOMContentLoaded', () => {
       hideDrawnCardPopup();
     }
   });
+  
+  // Fullscreen change listener
+  document.addEventListener('fullscreenchange', () => {
+    if (!isFullscreen()) {
+      checkScreenOrientation();
+    }
+  });
+  
+  // Landscape button
+  document.getElementById('landscape-btn')?.addEventListener('click', activateLandscape);
 });
+
+// Handle window resize
+window.addEventListener('resize', checkScreenOrientation);
