@@ -1,3 +1,4 @@
+// ==================== CONSTANTS ====================
 const COLORS = ['red', 'blue', 'green', 'yellow'];
 const SPECIAL_VALUES = ['S', 'R', '+2'];
 const WILD_VALUES = ['W', '+4'];
@@ -12,7 +13,7 @@ const EMOTES = {
   plus4: ['😱', '😡', '🤬'],
   win: ['🎉', '😎', '🏆'],
   lose: ['😢', '😞', '💔'],
-  uno: ['Uno!', '😱', '👀']
+  uno: ['UNO!', '😱', '👀']
 };
 
 // Game Settings
@@ -53,7 +54,9 @@ let state = {
   sortMode: null,
   dragCard: null,
   comboCount: 0,
-  lastPlayTime: 0
+  lastPlayTime: 0,
+  drawnCard: null,
+  drawnCardPlayable: false
 };
 
 // Audio Context
@@ -136,10 +139,10 @@ function createParticles() {
   
   const colors = ['#ff4757', '#3742fa', '#2ed573', '#ffa502', '#a55eea'];
   
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 15; i++) {
     const particle = document.createElement('div');
     particle.className = 'particle';
-    const size = 4 + Math.random() * 10;
+    const size = 4 + Math.random() * 8;
     particle.style.width = size + 'px';
     particle.style.height = size + 'px';
     particle.style.left = (Math.random() * 100) + '%';
@@ -200,6 +203,16 @@ function getRandomEmote(category) {
   return emotes[Math.floor(Math.random() * emotes.length)];
 }
 
+function getPositionClass(idx) {
+  const count = state.players.length;
+  if (count === 2) return idx === 0 ? 'bottom' : 'top';
+  if (count === 3) {
+    const positions = ['bottom', 'right', 'left'];
+    return positions[idx];
+  }
+  return ['bottom', 'left', 'top', 'right'][idx];
+}
+
 // Navigation
 function showScreen(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -218,7 +231,7 @@ function showGameMessage(text, duration = 1200) {
 
 // Show Emote
 function showEmote(playerIndex, emote) {
-  const zone = document.querySelector('.player-zone.' + getPositionClass(playerIndex));
+  const zone = document.querySelector('.player-zone.player-' + getPositionClass(playerIndex));
   if (!zone) return;
   
   let bubble = zone.querySelector('.emote-bubble');
@@ -234,13 +247,6 @@ function showEmote(playerIndex, emote) {
   setTimeout(() => {
     bubble.classList.remove('show');
   }, 2000);
-}
-
-function getPositionClass(idx) {
-  const count = state.players.length;
-  if (count === 2) return idx === 0 ? 'bottom' : 'top';
-  if (count === 3) return ['bottom', 'right', 'left'][idx];
-  return ['bottom', 'right', 'top', 'left'][idx];
 }
 
 // Deck Creation
@@ -265,42 +271,36 @@ function createDeck() {
 }
 
 // ==========================================
-// CARD RENDERING (FIXED WITH SVG)
+// CARD RENDERING (SVG)
 // ==========================================
 function renderCard(card, isBack = false) {
   const el = document.createElement('div');
   el.className = 'uno-card';
 
-  // --- 1. RENDER Back of Card ---
   if (isBack) {
     el.classList.add('card-back');
-    // Using the SVG structure from your HTML for the back
     el.innerHTML = `
       <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
          <defs>
-          <linearGradient id="unoRedLocal" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id="unoRedLocal${Math.random()}" x1="0%" y1="0%" x2="100%" y2="100%">
            <stop offset="0%" stop-color="#FF1744"/>
            <stop offset="100%" stop-color="#D50000"/>
           </linearGradient>
-          <linearGradient id="unoYellowLocal" x1="0%" y1="0%" x2="0%" y2="100%">
+          <linearGradient id="unoYellowLocal${Math.random()}" x1="0%" y1="0%" x2="0%" y2="100%">
            <stop offset="0%" stop-color="#FFEB3B"/>
            <stop offset="100%" stop-color="#FBC02D"/>
           </linearGradient>
          </defs>
          <g>
-          <rect width="240" height="360" rx="18" fill="#1a1a1a"/>
+          <rect width="240" height="360" rx="18" fill="#2d2d44"/>
           <rect x="10" y="10" width="220" height="340" rx="12" fill="none" stroke="#ffffff" stroke-width="8"/>
-          <ellipse cx="118.78647" cy="183.36061" rx="88" ry="156.33998" fill="url(#unoRedLocal)" stroke="null" transform="rotate(27 118.786 183.361)"/>
-          <text x="125" y="195" font-family="Arial Black, sans-serif" font-size="75" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" letter-spacing="2" transform="rotate(-16.0628 125 184.453)">UNO</text>
-          <text transform="rotate(-15.8894 120 179.453)" x="120" y="190" font-family="Arial Black, sans-serif" font-size="75" font-weight="900" fill="url(#unoYellowLocal)" stroke="#000000" stroke-width="2" text-anchor="middle" dominant-baseline="middle" letter-spacing="2">UNO</text>
+          <ellipse cx="120" cy="180" rx="80" ry="140" fill="url(#unoRedLocal${Math.random()})" transform="rotate(20 120 180)"/>
+          <text x="120" y="195" font-family="Arial Black, sans-serif" font-size="65" font-weight="900" fill="#ffd700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-15 120 190)">UNO</text>
          </g>
         </svg>`;
     return el;
   }
 
-  // --- 2. Render Front of Card ---
-  
-  // Determine Fill Color (uses gradients defined in HTML head)
   let fill = '';
   let isWild = false;
   
@@ -309,16 +309,14 @@ function renderCard(card, isBack = false) {
   else if (card.c === 'green') fill = 'url(#unoGreen)';
   else if (card.c === 'yellow') fill = 'url(#unoYellow)';
   else {
-    fill = '#1a1a1a'; // Wild card background
+    fill = '#2d2d44';
     isWild = true;
   }
 
-  // Prepare Content Variables
   let centerContent = '';
   let cornerValue = card.v;
   let centerFontSize = 180;
 
-  // Logic for specific card types
   if (card.v === 'S') {
     cornerValue = '⊘';
     centerFontSize = 120;
@@ -335,21 +333,18 @@ function renderCard(card, isBack = false) {
                       <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">+2</text>`;
   } else if (card.v === 'W') {
     cornerValue = 'W';
-    centerContent = ''; // Wild visuals handled by pattern
+    centerContent = '';
   } else if (card.v === '+4') {
     cornerValue = '+4';
-    // Special skew transform for +4
     centerContent = `<g transform="skewX(-10)">
         <text stroke-width="10" stroke="#000000" dominant-baseline="middle" text-anchor="middle" fill="#000000" font-weight="900" font-size="100" font-family="Arial Black, sans-serif" y="186" x="152.41306">+4</text>
         <text dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-weight="900" font-size="100" font-family="Arial Black, sans-serif" y="179" x="145.41306">+4</text>
       </g>`;
   } else {
-    // Standard Numbers 0-9
     centerContent = `<text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" x="128" dy="8">${card.v}</text>
                       <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">${card.v}</text>`;
   }
 
-  // Wild Card Pattern (Multi-color ellipse)
   let wildPattern = '';
   if (isWild) {
     wildPattern = `
@@ -362,13 +357,11 @@ function renderCard(card, isBack = false) {
       </g>`;
   }
 
-  // Center Ellipse (White ring) - Only for colored cards
   let centerEllipse = '';
   if (!isWild) {
     centerEllipse = `<ellipse transform="rotate(-60.409 117.875 181.408)" stroke="#ffffff" cx="117.87508" cy="181.40815" rx="159.19945" ry="82.07582" fill="none" stroke-width="6"/>`;
   }
 
-  // Construct Final SVG String
   el.innerHTML = `
     <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
      <g>
@@ -377,12 +370,10 @@ function renderCard(card, isBack = false) {
       ${centerEllipse}
       ${wildPattern}
       ${centerContent}
-      <!-- Corner Top Left -->
       <g>
        <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#000000" text-anchor="middle" x="44.67969" y="61">${cornerValue}</text>
        <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle" y="58" x="41.67969">${cornerValue}</text>
       </g>
-      <!-- Corner Bottom Right (Rotated) -->
       <g transform="rotate(180 162 238)">
        <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#000000" text-anchor="middle" x="45" y="61">${cornerValue}</text>
        <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle" y="58" x="42">${cornerValue}</text>
@@ -411,22 +402,16 @@ function updateUI() {
   const colorIndicator = document.getElementById('color-indicator');
   if (colorIndicator) {
     colorIndicator.className = 'color-indicator ' + state.activeColor;
-    
-    document.querySelectorAll('.player-avatar').forEach((avatar, idx) => {
-      avatar.classList.remove('color-glow', 'red', 'blue', 'green', 'yellow');
-      if (idx < state.players.length) {
-        avatar.classList.add('color-glow', state.activeColor);
-      }
-    });
   }
   
   const deckCount = document.getElementById('deck-count');
   if (deckCount) deckCount.textContent = state.deck.length;
   
-  const directionArc = document.getElementById('direction-arc');
-  if (directionArc) {
-    directionArc.classList.remove('clockwise', 'counter');
-    directionArc.classList.add(state.direction === 1 ? 'clockwise' : 'counter');
+  const directionIndicator = document.getElementById('direction-indicator');
+  if (directionIndicator) {
+    directionIndicator.classList.add('active');
+    directionIndicator.classList.remove('clockwise', 'counter');
+    directionIndicator.classList.add(state.direction === 1 ? 'clockwise' : 'counter');
   }
   
   const unoBtn = document.getElementById('uno-btn');
@@ -439,9 +424,8 @@ function updateUI() {
     }
   }
   
-  updateStackCounter();
   updateTurnIndicator();
-  updateValidCardsIndicator();
+  updatePlayerZones();
 }
 
 function updateTurnIndicator() {
@@ -469,59 +453,65 @@ function updateTurnIndicator() {
       if (state.timer <= 3) playerTimer.classList.add('danger');
       else if (state.timer <= 5) playerTimer.classList.add('warning');
     }
-    
-    document.querySelectorAll('.player-info').forEach((info, idx) => {
-      info.classList.remove('warning');
-      if (idx === state.turn && state.timer <= 3) {
-        info.classList.add('warning');
-      }
-    });
   } else {
     indicator.style.display = 'none';
   }
 }
 
-function updateStackCounter() {
-  const centerArea = document.getElementById('center-area');
-  if (!centerArea) return;
-  
-  let stackEl = centerArea.querySelector('.stack-counter');
-  
-  if (state.drawStack > 0) {
-    if (!stackEl) {
-      stackEl = document.createElement('div');
-      stackEl.className = 'stack-counter';
-      centerArea.appendChild(stackEl);
-    }
-    stackEl.innerHTML = '<span>+' + state.drawStack + '</span>';
-  } else if (stackEl) {
-    stackEl.remove();
-  }
-}
-
-// Valid Cards Indicator
-function updateValidCardsIndicator() {
-  const indicator = document.getElementById('valid-cards-indicator');
-  if (!indicator) return;
-  
-  if (state.turn === 0 && state.active && !state.isOver) {
-    const player = state.players[0];
-    if (!player) return;
+function updatePlayerZones() {
+  state.players.forEach((player, idx) => {
+    const zone = document.querySelector('.player-zone.player-' + getPositionClass(idx));
+    if (!zone) return;
     
-    let validCount = 0;
+    const info = zone.querySelector('.player-info');
+    const nameEl = zone.querySelector('.player-name');
+    const countEl = zone.querySelector('.card-count');
+    const avatar = zone.querySelector('.player-avatar');
     
-    if (state.drawStack > 0 && gameSettings.stacking) {
-      validCount = player.hand.filter(c => canStackCard(c)).length;
-      indicator.textContent = validCount + ' stackable card' + (validCount !== 1 ? 's' : '');
-    } else {
-      validCount = player.hand.filter(c => checkValidPlay(c)).length;
-      indicator.textContent = validCount + ' playable card' + (validCount !== 1 ? 's' : '');
+    if (nameEl) nameEl.textContent = player.name;
+    if (countEl) countEl.textContent = player.hand.length + ' cards';
+    
+    if (info) {
+      info.classList.remove('active', 'warning');
+      if (state.turn === idx) {
+        info.classList.add('active');
+        if (state.timer <= 3 && gameSettings.timer) {
+          info.classList.add('warning');
+        }
+      }
     }
     
-    indicator.classList.add('visible');
-  } else {
-    indicator.classList.remove('visible');
-  }
+    if (avatar) {
+      avatar.style.background = getPlayerColor(idx);
+      avatar.classList.remove('color-glow', 'red', 'blue', 'green', 'yellow');
+      avatar.classList.add('color-glow', state.activeColor);
+    }
+    
+    // UNO alert
+    let unoAlert = zone.querySelector('.uno-alert');
+    if (player.hand.length === 1) {
+      if (!unoAlert) {
+        unoAlert = document.createElement('div');
+        unoAlert.className = 'uno-alert';
+        unoAlert.textContent = 'UNO!';
+        info.appendChild(unoAlert);
+      }
+    } else if (unoAlert) {
+      unoAlert.remove();
+    }
+    
+    // Bot cards display
+    if (idx !== 0) {
+      const cardsContainer = zone.querySelector('.bot-cards-horizontal, .bot-cards-vertical');
+      if (cardsContainer) {
+        cardsContainer.innerHTML = '';
+        const displayCount = Math.min(player.hand.length, 7);
+        for (let i = 0; i < displayCount; i++) {
+          cardsContainer.appendChild(renderCard(null, true));
+        }
+      }
+    }
+  });
 }
 
 // Sort Hand
@@ -571,13 +561,6 @@ function renderHand() {
   
   const hand = state.sortMode ? getSortedHand() : player.hand;
   const originalIndices = state.sortMode ? hand.map(card => player.hand.indexOf(card)) : null;
-  
-  const needsStacking = hand.length >= 15;
-  if (needsStacking) {
-    handContainer.classList.add('stacked');
-  } else {
-    handContainer.classList.remove('stacked');
-  }
   
   const isMyTurn = state.turn === 0;
   
@@ -636,92 +619,18 @@ function renderHand() {
   });
 }
 
-function renderGameTable() {
-  const gameTable = document.getElementById('game-table');
-  if (!gameTable) return;
-  gameTable.querySelectorAll('.player-zone').forEach(z => z.remove());
-  
-  const playerCount = state.players.length;
-  
-  state.players.forEach((player, idx) => {
-    if (idx === 0) return;
-    
-    const zone = document.createElement('div');
-    zone.className = 'player-zone ' + getPositionClass(idx);
-    
-    const info = document.createElement('div');
-    info.className = 'player-info glass-panel';
-    if (state.turn === idx) info.classList.add('active');
-    
-    const avatarDiv = document.createElement('div');
-    avatarDiv.className = 'player-avatar color-glow ' + state.activeColor;
-    avatarDiv.style.background = getPlayerColor(idx);
-    avatarDiv.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
-    
-    const nameDiv = document.createElement('div');
-    nameDiv.innerHTML = '<div class="font-bold text-xs" style="color: var(--fg);">' + player.name + '</div><div class="card-count-badge">' + player.hand.length + '</div>';
-    
-    info.appendChild(avatarDiv);
-    info.appendChild(nameDiv);
-    zone.appendChild(info);
-    
-    if (player.hand.length === 1) {
-      const unoAlert = document.createElement('div');
-      unoAlert.className = 'uno-alert';
-      unoAlert.textContent = 'UNO!';
-      info.appendChild(unoAlert);
-    }
-    
-    const cardsDiv = document.createElement('div');
-    cardsDiv.className = 'bot-cards ' + (getPositionClass(idx) === 'left' || getPositionClass(idx) === 'right' ? 'vertical' : '');
-    const displayCount = Math.min(player.hand.length, 7);
-    for (let i = 0; i < displayCount; i++) {
-      cardsDiv.appendChild(renderCard(null, true));
-    }
-    
-    zone.appendChild(cardsDiv);
-    gameTable.appendChild(zone);
-  });
-  
-  const mainZone = document.createElement('div');
-  mainZone.className = 'player-zone bottom';
-  
-  const mainInfo = document.createElement('div');
-  mainInfo.className = 'player-info glass-panel';
-  if (state.turn === 0) mainInfo.classList.add('active');
-  
-  const mainAvatar = document.createElement('div');
-  mainAvatar.className = 'player-avatar color-glow ' + state.activeColor;
-  mainAvatar.style.background = getPlayerColor(0);
-  mainAvatar.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
-  
-  const mainNameDiv = document.createElement('div');
-  mainNameDiv.innerHTML = '<div class="font-bold text-xs" style="color: var(--fg);">' + state.players[0].name + '</div><div class="card-count-badge">' + state.players[0].hand.length + '</div>';
-  
-  mainInfo.appendChild(mainAvatar);
-  mainInfo.appendChild(mainNameDiv);
-  
-  if (state.players[0].hand.length === 1) {
-    const unoAlert = document.createElement('div');
-    unoAlert.className = 'uno-alert';
-    unoAlert.textContent = 'UNO!';
-    mainInfo.appendChild(unoAlert);
-  }
-  
-  mainZone.appendChild(mainInfo);
-  gameTable.appendChild(mainZone);
-}
-
 // Timer
 function startTimer() {
   if (!gameSettings.timer) return;
   stopTimer();
   state.timer = TURN_TIME;
   updateTurnIndicator();
+  updatePlayerZones();
   
   state.timerInterval = setInterval(() => {
     state.timer--;
     updateTurnIndicator();
+    updatePlayerZones();
     
     if (state.timer <= 3 && state.timer > 0) {
       playSound('tick');
@@ -801,7 +710,6 @@ function handleTimeout() {
   }
   
   renderHand();
-  renderGameTable();
   updateUI();
   advanceTurn();
 }
@@ -866,7 +774,7 @@ async function drawCardsWithAnimation(playerIndex, count) {
     vibrate(30);
     
     if (playerIndex === 0) renderHand();
-    else renderGameTable();
+    else updatePlayerZones();
     
     await sleep(60);
   }
@@ -913,7 +821,7 @@ async function dealCardsFromCenter() {
       setTimeout(() => animCard.remove(), 300);
       
       if (pIdx === 0) renderHand();
-      renderGameTable();
+      updatePlayerZones();
     }
   }
   
@@ -927,10 +835,10 @@ function getCardDestination(playerIndex, gameTable) {
   const h = gameTable.offsetHeight;
   
   const positions = [
-    { x: w / 2, y: h - 50 },
-    { x: w - 80, y: h / 2 },
-    { x: w / 2, y: 80 },
-    { x: 80, y: h / 2 }
+    { x: w / 2, y: h - 50 },     // bottom
+    { x: 80, y: h / 2 },         // left
+    { x: w / 2, y: 80 },         // top
+    { x: w - 80, y: h / 2 }      // right
   ];
   
   return positions[playerIndex % positions.length];
@@ -1063,7 +971,6 @@ function advanceTurn() {
   state.turn = getNextPlayerIndex();
   updateUI();
   renderHand();
-  renderGameTable();
   
   const currentPlayer = state.players[state.turn];
   if (currentPlayer && currentPlayer.isBot) {
@@ -1162,6 +1069,57 @@ function chooseColor(playerIndex) {
   let counts = { red: 0, blue: 0, green: 0, yellow: 0 };
   player.hand.forEach(c => { if (c.c !== 'black') counts[c.c]++; });
   return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+}
+
+// ==========================================
+// DRAWN CARD POPUP - KEEP/PLAY SYSTEM
+// ==========================================
+function showDrawnCardPopup(card, canPlay) {
+  const popup = document.getElementById('drawn-card-popup');
+  const display = document.getElementById('drawn-card-display');
+  const keepBtn = document.getElementById('keep-btn');
+  const playBtn = document.getElementById('play-btn');
+  
+  if (!popup || !display) return;
+  
+  display.innerHTML = '';
+  const cardEl = renderCard(card);
+  display.appendChild(cardEl);
+  
+  if (canPlay && playBtn) {
+    playBtn.style.display = 'block';
+  } else if (playBtn) {
+    playBtn.style.display = 'none';
+  }
+  
+  popup.classList.add('active');
+  state.drawnCard = card;
+  state.drawnCardPlayable = canPlay;
+}
+
+function hideDrawnCardPopup() {
+  const popup = document.getElementById('drawn-card-popup');
+  if (popup) popup.classList.remove('active');
+  state.drawnCard = null;
+  state.drawnCardPlayable = false;
+}
+
+function handleKeepCard() {
+  hideDrawnCardPopup();
+  stopTimer();
+  advanceTurn();
+}
+
+function handlePlayDrawnCard() {
+  if (!state.drawnCard || !state.drawnCardPlayable) return;
+  
+  const player = state.players[0];
+  if (!player) return;
+  
+  const cardIndex = player.hand.length - 1;
+  hideDrawnCardPopup();
+  stopTimer();
+  playCard(0, cardIndex);
 }
 
 // 3D Color Picker
@@ -1339,11 +1297,12 @@ async function initGame() {
     sortMode: null,
     dragCard: null,
     comboCount: 0,
-    lastPlayTime: 0
+    lastPlayTime: 0,
+    drawnCard: null,
+    drawnCardPlayable: false
   };
   
   renderHand();
-  renderGameTable();
   updateUI();
   
   showGameMessage('Dealing Cards...', 1500);
@@ -1397,6 +1356,7 @@ function createConfetti() {
     confetti.style.animationDelay = Math.random() * 1 + 's';
     confetti.style.width = (5 + Math.random() * 8) + 'px';
     confetti.style.height = confetti.style.width;
+    confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
     container.appendChild(confetti);
   }
   
@@ -1446,7 +1406,7 @@ function endGame(winnerIndex, isTimeUp) {
     isWinner: idx === winnerIndex
   })).sort((a, b) => a.cards - b.cards);
   
-  const resultsContainer = document.getElementById('results-container');
+    const resultsContainer = document.getElementById('results-container');
   if (resultsContainer) {
     resultsContainer.innerHTML = results.map((r, i) => 
       '<div class="flex items-center gap-3 p-2 rounded-xl mb-2" style="background: ' + (r.isWinner ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255,255,255,0.03)') + '">' +
@@ -1462,26 +1422,72 @@ function endGame(winnerIndex, isTimeUp) {
   if (gameOver) gameOver.classList.add('active');
 }
 
-async function executePlayerTurn(cardIndex) {
-  if (state.turn !== 0 || state.isOver || !state.active) return;
-  stopTimer();
-  await playCard(0, cardIndex);
-}
-
-// Table Ripple Effect
-function createTableRipple(e) {
+// ==========================================
+// RENDER GAME TABLE (Fix Layout Pemain)
+// ==========================================
+function renderGameTable() {
   const gameTable = document.getElementById('game-table');
-  const tableSurface = document.getElementById('table-surface');
-  if (!gameTable || !tableSurface) return;
+  if (!gameTable) return;
   
-  if (e.target.closest('.player-zone') || e.target.closest('.center-area') || e.target.closest('.direction-ring')) return;
+  // Hapus zona lama
+  gameTable.querySelectorAll('.player-zone').forEach(z => z.remove());
   
-  tableSurface.classList.remove('ripple');
-  void tableSurface.offsetWidth;
-  tableSurface.classList.add('ripple');
+  const playerCount = state.players.length;
+  
+  // Buat zona untuk setiap pemain
+  state.players.forEach((player, idx) => {
+    const position = getPositionClass(idx);
+    const zone = document.createElement('div');
+    zone.className = `player-zone player-${position}`;
+    
+    // Info Pemain (Nama, Avatar, Jumlah Kartu)
+    const info = document.createElement('div');
+    info.className = 'player-info glass-panel';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'player-avatar';
+    avatar.style.background = getPlayerColor(idx);
+    
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'player-name';
+    nameDiv.textContent = player.name;
+    
+    const countDiv = document.createElement('div');
+    countDiv.className = 'card-count';
+    countDiv.textContent = player.hand.length + ' cards';
+    
+    info.appendChild(avatar);
+    info.appendChild(nameDiv);
+    info.appendChild(countDiv);
+    zone.appendChild(info);
+    
+    // Container Kartu Bot (Horizontal/Vertical berdasarkan posisi)
+    if (idx !== 0) {
+      const cardsContainer = document.createElement('div');
+      // Tentukan orientasi berdasarkan posisi
+      if (position === 'left' || position === 'right') {
+        cardsContainer.className = 'bot-cards-vertical'; // Kartu bertumpuk vertikal
+      } else {
+        cardsContainer.className = 'bot-cards-horizontal'; // Kartu bertumpuk horizontal
+      }
+      
+      const displayCount = Math.min(player.hand.length, 7);
+      for (let i = 0; i < displayCount; i++) {
+        cardsContainer.appendChild(renderCard(null, true));
+      }
+      
+      zone.appendChild(cardsContainer);
+    }
+    
+    gameTable.appendChild(zone);
+  });
+  
+  updatePlayerZones();
 }
 
-// Event Listeners
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
   runLoadingScreen();
@@ -1507,12 +1513,19 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('menu-screen');
   });
   
-  // Draw pile
+  // Draw pile - LOGIKA BARU: Muncul Pop-up Keep/Play
   document.getElementById('draw-pile')?.addEventListener('click', async () => {
     if (state.turn !== 0 || state.isOver || !state.active) return;
-    stopTimer();
     
+    // Jika sedang ada stack +2/+4 dan harus ambil kartu
     if (state.drawStack > 0 && gameSettings.stacking) {
+      // Cek apakah bisa stack, jika tidak paksa ambil
+      const canStack = state.players[0].hand.some(c => canStackCard(c));
+      if (canStack) {
+        showGameMessage("You have a card to stack!");
+        return;
+      }
+      
       await drawCardsWithAnimation(0, state.drawStack);
       showGameMessage('You drew ' + state.drawStack + ' cards!');
       vibrate([50, 30, 50]);
@@ -1524,18 +1537,44 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    await drawCardsWithAnimation(0, 1);
-    showGameMessage('You drew 1 card');
+    // Logika Draw Biasa dengan Pop-up
+    stopTimer(); // Stop timer saat memilih
+    
+    const card = drawCards(1)[0];
+    if (!card) {
+      startTimer();
+      return;
+    }
+    
+    // Tambahkan ke tangan sementara untuk pengecekan
+    state.players[0].hand.push(card);
+    
+    // Render tangan dulu agar kartu muncul
     renderHand();
     updateUI();
     
-    const drawnCard = state.players[0].hand[state.players[0].hand.length - 1];
-    if (!drawnCard || !checkValidPlay(drawnCard)) {
-      await sleep(300);
-      advanceTurn();
+    // Cek apakah kartu bisa dimainkan
+    const isPlayable = checkValidPlay(card);
+    
+    if (isPlayable) {
+      // Tampilkan pop-up Keep or Play
+      showDrawnCardPopup(card, true);
+      // Timer tetap berhenti sampai pemilih memilih
     } else {
-      startTimer();
+      // Jika tidak bisa dimainkan, langsung keep dan giliran berganti
+      showGameMessage("Cannot play this card");
+      await sleep(500);
+      advanceTurn();
     }
+  });
+  
+  // Event Listener untuk Pop-up Draw
+  document.getElementById('keep-btn')?.addEventListener('click', () => {
+    handleKeepCard();
+  });
+  
+  document.getElementById('play-btn')?.addEventListener('click', () => {
+    handlePlayDrawnCard();
   });
   
   // UNO button
@@ -1546,7 +1585,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showGameMessage('UNO!');
       playSound('uno');
       vibrate(100);
-      renderGameTable();
+      renderGameTable(); // Update UI bot zone
     }
   });
   
@@ -1576,7 +1615,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   // Table click for ripple
-  document.getElementById('game-table')?.addEventListener('click', createTableRipple);
+  document.getElementById('game-table')?.addEventListener('click', (e) => {
+    const surface = document.getElementById('table-surface');
+    if (!surface) return;
+    if (e.target.closest('.player-zone') || e.target.closest('.center-area')) return;
+    
+    surface.classList.remove('ripple');
+    void surface.offsetWidth;
+    surface.classList.add('ripple');
+  });
   
   // Drag and drop to discard pile
   const discardPile = document.getElementById('discard-pile');
@@ -1614,6 +1661,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') {
       closeSettings();
       hideColorPicker3D();
+      hideDrawnCardPopup();
     }
   });
 });
+
+// Helper: Sleep
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
