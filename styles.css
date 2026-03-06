@@ -168,6 +168,86 @@ body {
   50% { opacity: 0.3; }
 }
 
+/* ==================== AUTH SCREEN ==================== */
+.auth-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+}
+
+.auth-content {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.auth-subtitle {
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 3px;
+  margin-bottom: 40px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.auth-box {
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-box h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+}
+
+.auth-box p {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.gsignin-container {
+  display: flex;
+  justify-content: center;
+  min-height: 42px; /* Prevent layout shift */
+}
+
+.logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 10px;
+}
+
+.logout-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--fg-light);
+}
+
+.logout-btn:hover {
+  background: rgba(255, 59, 92, 0.2);
+}
+
+.logout-btn:hover svg {
+  fill: var(--uno-red);
+}
+
 /* ==================== CARD STYLING ==================== */
 .uno-card {
   width: var(--card-width);
@@ -1032,6 +1112,12 @@ body {
   border-radius: 25px;
   background: linear-gradient(135deg, rgba(81, 207, 102, 0.2), rgba(47, 158, 68, 0.2));
   border: 2px solid rgba(81, 207, 102, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.room-code-display:hover {
+  background: rgba(81, 207, 102, 0.3);
 }
 
 .code-label {
@@ -1092,7 +1178,7 @@ body {
 /* Lobby Players Grid */
 .lobby-players-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 15px;
   margin-bottom: 20px;
 }
@@ -1107,6 +1193,7 @@ body {
   align-items: center;
   text-align: center;
   transition: all 0.3s ease;
+  min-height: 140px;
 }
 
 .lobby-player-slot.filled {
@@ -1357,7 +1444,7 @@ body {
 
 .player-found-list {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 15px;
   margin-bottom: 30px;
   max-width: 400px;
@@ -1576,6 +1663,17 @@ body {
   right: 20px;
   top: 50%;
   transform: translateY(-50%);
+}
+
+/* 5 Player Layout Adjustments */
+.player-zone.player-top-left {
+  top: 80px;
+  left: 30px;
+}
+
+.player-zone.player-top-right {
+  top: 80px;
+  right: 30px;
 }
 
 .player-info {
@@ -2456,9 +2554,18 @@ body {
   .draw-pile-container { right: 15px; }
   .uno-btn-wrap { left: 15px; bottom: 130px; }
   
+  /* Hide side players on small mobile, keep top/bottom */
   .player-zone.player-left,
   .player-zone.player-right {
     display: none;
+  }
+
+  /* Show 5th player (top-left) on mobile as top if needed, or handle via JS logic to reposition */
+  .player-zone.player-top-left {
+     display: flex;
+     top: 20px;
+     left: 50%;
+     transform: translateX(-50%);
   }
   
   .bot-cards-horizontal .uno-card,
@@ -2468,10 +2575,6 @@ body {
   }
   
   .multiplayer-options-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .lobby-players-grid {
     grid-template-columns: 1fr;
   }
   
