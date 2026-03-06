@@ -223,9 +223,8 @@ function showGameMessage(text, duration = 1500) {
 }
 
 function showToast(message, duration = 2500) {
-  let toast = document.getElementById('toast'); // Disesuaikan dengan HTML ID 'toast'
+  let toast = document.getElementById('toast');
   if (!toast) {
-    // Fallback jika tidak ada di HTML
     toast = document.createElement('div');
     toast.id = 'toast';
     toast.className = 'toast';
@@ -450,7 +449,6 @@ function renderCard(card, isBack = false) {
 }
 
 // ==================== MENU & MODAL FUNCTIONS ====================
-// Sinkronisasi dengan fungsi onclick di HTML
 function showMultiplayerOptions() {
   const modal = document.getElementById('multiplayer-options-modal');
   if (modal) modal.classList.add('active');
@@ -466,17 +464,13 @@ function showCreateLobby() {
   const modal = document.getElementById('create-lobby-modal');
   if (modal) {
     modal.classList.add('active');
-    // Isi nilai default
     const nameInput = document.getElementById('host-name');
     if (nameInput) nameInput.value = multiplayerState.playerName;
-    
-    // Setup listener untuk tombol mode/player count jika belum ada
     setupModalButtons(modal);
   }
 }
 
 function setupModalButtons(modal) {
-    // Mode Buttons
     modal.querySelectorAll('.mode-btn').forEach(btn => {
       if (!btn.dataset.initialized) {
         btn.addEventListener('click', () => {
@@ -487,7 +481,6 @@ function setupModalButtons(modal) {
       }
     });
     
-    // Count Buttons
     modal.querySelectorAll('.count-btn').forEach(btn => {
       if (!btn.dataset.initialized) {
         btn.addEventListener('click', () => {
@@ -526,7 +519,7 @@ async function createLobby() {
   multiplayerState.lobbyId = roomCode;
   
   closeCreateLobby();
-  showScreen('lobby-room'); // ID HTML: lobby-room
+  showScreen('lobby-room');
   
   // Create lobby in Firebase
   const lobbyRef = database.ref('lobbies/' + roomCode);
@@ -654,7 +647,7 @@ async function joinLobbyById(lobbyId) {
   multiplayerState.isHost = false;
   
   closeJoinLobby();
-  showScreen('lobby-room'); // ID HTML: lobby-room
+  showScreen('lobby-room');
   
   const lobbyRef = database.ref('lobbies/' + lobbyId);
   multiplayerState.lobbyRef = lobbyRef;
@@ -763,7 +756,7 @@ function cancelQuickMatch() {
 
 async function createQuickMatchLobby() {
   multiplayerState.isHost = true;
-  multiplayerState.playerName = 'Player_' + Math.random().toString(36).substr(2, 4); // Quick name
+  multiplayerState.playerName = 'Player_' + Math.random().toString(36).substr(2, 4);
   
   const roomCode = generateRoomCode();
   multiplayerState.lobbyId = roomCode;
@@ -832,6 +825,20 @@ function copyRoomCode() {
   });
 }
 
+function pasteCode() {
+  navigator.clipboard.readText().then(text => {
+    const input = document.getElementById('room-code-input');
+    if (input) input.value = text;
+  }).catch(err => {
+    showToast('Failed to paste');
+  });
+}
+
+function changeTeam() {
+  // Placeholder for team mode logic if implemented
+  showToast("Team changing not implemented in this mode.");
+}
+
 function renderLobbyPlayers(players, playerOrder) {
   const grid = document.getElementById('lobby-players-grid');
   if (!grid) return;
@@ -847,7 +854,6 @@ function renderLobbyPlayers(players, playerOrder) {
     
     if (player) {
       const isYou = playerId === multiplayerState.playerId;
-      // Sesuaikan class dengan CSS
       let slotClass = "lobby-player-slot filled";
       if (player.isHost) slotClass += " host";
       if (isYou) slotClass += " you";
@@ -956,6 +962,10 @@ async function toggleReady() {
   if (playerData) {
     await playerRef.update({ isReady: !playerData.isReady });
     playSound('card');
+    
+    // Update button text
+    const btn = document.getElementById('ready-btn');
+    if(btn) btn.textContent = !playerData.isReady ? "Cancel" : "Ready Up";
   }
 }
 
@@ -1152,8 +1162,15 @@ async function startMultiplayerGame() {
   }
   
   const deck = createDeck();
-  const startCard = deck.pop();
+  let startCard = deck.pop();
   
+  // Ensure first card is not a wild or action card for simplicity
+  while (startCard.c === 'black' || ['S', 'R', '+2'].includes(startCard.v)) {
+    deck.unshift(startCard);
+    shuffle(deck);
+    startCard = deck.pop();
+  }
+
   const playerHands = {};
   lobbyData.playerOrder.forEach(playerId => {
     playerHands[playerId] = [];
@@ -1842,6 +1859,23 @@ async function selectWildColor(color) {
   showActionFlash('wild');
 }
 
+// ==================== SORT HAND ====================
+function sortHand(mode) {
+  const player = state.players[multiplayerState.playerIndex];
+  if (!player) return;
+  
+  if (mode === 'color') {
+    const colorOrder = { red: 1, blue: 2, green: 3, yellow: 4, black: 5 };
+    player.hand.sort((a, b) => colorOrder[a.c] - colorOrder[b.c]);
+  } else {
+    const valueOrder = { '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'S': 10, 'R': 11, '+2': 12, 'W': 13, '+4': 14 };
+    player.hand.sort((a, b) => valueOrder[a.v] - valueOrder[b.v]);
+  }
+  
+  renderHand();
+  playSound('card');
+}
+
 // ==================== DRAW CARD ====================
 async function handleDrawPile() {
   if (state.turn !== multiplayerState.playerIndex || !state.active) return;
@@ -2164,7 +2198,7 @@ async function rematch() {
   if (modal) modal.classList.remove('active');
   
   if (multiplayerState.isHost) {
-    await multiplayerState.lobbyRef?.update({ status: 'waiting' });
+    await multiplayerState.lobbyRef?.update({ status: 'waiting', game: null });
   }
   
   showScreen('lobby-room');
