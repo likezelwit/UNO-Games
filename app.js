@@ -2,7 +2,7 @@
 const COLORS = ['red', 'blue', 'green', 'yellow'];
 const SPECIAL_VALUES = ['S', 'R', '+2'];
 const WILD_VALUES = ['W', '+4'];
-const BOT_NAMES = ['Alex', 'Blake', 'Casey', 'Drew'];
+const BOT_NAMES = ['Alex', 'Blake', 'Casey', 'Drew', 'Ellis', 'Flynn'];
 const BOT_PERSONALITIES = ['aggressive', 'defensive', 'balanced', 'chaotic'];
 const TURN_TIME = 10;
 const GAME_TIME = 180;
@@ -13,7 +13,13 @@ const EMOTES = {
   plus4: ['😱', '😡', '🤬'],
   win: ['🎉', '😎', '🏆'],
   lose: ['😢', '😞', '💔'],
-  uno: ['UNO!', '😱', '👀']
+  uno: ['UNO!', '😱', '👀'],
+  angry: '😠',
+  laugh: '😂',
+  cry: '😢',
+  fire: '🔥',
+  cool: '😎',
+  think: '🤔'
 };
 
 // Game Settings
@@ -23,6 +29,19 @@ const gameSettings = {
   timer: true,
   sound: true,
   botDifficulty: 'easy'
+};
+
+// Player Stats (Demo)
+const playerStats = {
+  name: 'Player',
+  level: 12,
+  xp: 2450,
+  xpNeeded: 3000,
+  coins: 1250,
+  rank: 'Gold',
+  rankPosition: 1234,
+  skins: ['classic', 'neon'],
+  selectedSkin: 'classic'
 };
 
 // Game State
@@ -83,17 +102,18 @@ function playSound(type) {
     const t = audioCtx.currentTime;
     
     const sounds = {
-      card: { type: 'triangle', freq: [700, 350], dur: 0.08, vol: 0.06 },
-      win: { type: 'sine', freq: [523, 659, 784, 1047], dur: 0.6, vol: 0.07 },
-      lose: { type: 'sawtooth', freq: [200, 100], dur: 0.4, vol: 0.05 },
-      draw: { type: 'sine', freq: [450, 380], dur: 0.06, vol: 0.04 },
-      tick: { type: 'sine', freq: [800, 800], dur: 0.05, vol: 0.03 },
-      deal: { type: 'triangle', freq: [550, 650], dur: 0.07, vol: 0.04 },
-      skip: { type: 'square', freq: [300, 400, 300], dur: 0.3, vol: 0.05 },
-      reverse: { type: 'sine', freq: [400, 500, 400], dur: 0.25, vol: 0.05 },
-      wild: { type: 'sine', freq: [300, 450, 600], dur: 0.4, vol: 0.06 },
-      combo: { type: 'sine', freq: [600, 800, 1000], dur: 0.2, vol: 0.05 },
-      uno: { type: 'sine', freq: [523, 659, 784], dur: 0.5, vol: 0.07 }
+      card: { type: 'triangle', freq: [800, 400], dur: 0.1, vol: 0.08 },
+      win: { type: 'sine', freq: [523, 659, 784, 1047], dur: 0.8, vol: 0.1 },
+      lose: { type: 'sawtooth', freq: [200, 100], dur: 0.5, vol: 0.06 },
+      draw: { type: 'sine', freq: [500, 400], dur: 0.08, vol: 0.05 },
+      tick: { type: 'sine', freq: [900, 900], dur: 0.06, vol: 0.04 },
+      deal: { type: 'triangle', freq: [600, 700], dur: 0.08, vol: 0.05 },
+      skip: { type: 'square', freq: [350, 450, 350], dur: 0.35, vol: 0.06 },
+      reverse: { type: 'sine', freq: [450, 550, 450], dur: 0.3, vol: 0.06 },
+      wild: { type: 'sine', freq: [350, 500, 700, 900], dur: 0.5, vol: 0.08 },
+      combo: { type: 'sine', freq: [700, 900, 1100], dur: 0.25, vol: 0.06 },
+      uno: { type: 'sine', freq: [523, 659, 784], dur: 0.6, vol: 0.1 },
+      emote: { type: 'sine', freq: [600, 800], dur: 0.15, vol: 0.05 }
     };
     
     const s = sounds[type];
@@ -102,14 +122,13 @@ function playSound(type) {
     osc.type = s.type;
     
     if (Array.isArray(s.freq) && s.freq.length > 1) {
+      const noteLength = s.dur / s.freq.length;
       s.freq.forEach((f, i) => {
-        setTimeout(() => {
-          if (i === 0) {
-            osc.frequency.setValueAtTime(f, t);
-          } else {
-            osc.frequency.exponentialRampToValueAtTime(Math.max(1, f), t + (s.dur * i / s.freq.length));
-          }
-        }, 0);
+        const startTime = t + (i * noteLength);
+        osc.frequency.setValueAtTime(Math.max(1, f), startTime);
+        if (i < s.freq.length - 1) {
+          osc.frequency.exponentialRampToValueAtTime(Math.max(1, s.freq[i + 1]), startTime + noteLength);
+        }
       });
     } else {
       osc.frequency.setValueAtTime(Array.isArray(s.freq) ? s.freq[0] : s.freq, t);
@@ -132,17 +151,59 @@ function vibrate(pattern) {
   }
 }
 
+// ==================== WEATHER & TIME SYSTEM ====================
+function updateTimeAndWeather() {
+  const gameBg = document.getElementById('game-bg');
+  const weatherContainer = document.getElementById('weather-effects');
+  
+  if (!gameBg) return;
+  
+  const hour = new Date().getHours();
+  
+  // Remove all classes first
+  gameBg.classList.remove('day', 'sunset', 'night');
+  
+  // Set time-based background
+  if (hour >= 6 && hour < 12) {
+    gameBg.classList.add('day');
+  } else if (hour >= 12 && hour < 18) {
+    gameBg.classList.add('day'); // Afternoon
+  } else if (hour >= 18 && hour < 21) {
+    gameBg.classList.add('sunset');
+  } else {
+    gameBg.classList.add('night');
+    // Add random rain at night (30% chance)
+    if (Math.random() < 0.3 && weatherContainer && weatherContainer.children.length === 0) {
+      createRainEffect();
+    }
+  }
+}
+
+function createRainEffect() {
+  const container = document.getElementById('weather-effects');
+  if (!container) return;
+  
+  for (let i = 0; i < 50; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'rain-drop';
+    drop.style.left = Math.random() * 100 + '%';
+    drop.style.animationDuration = (0.5 + Math.random() * 0.5) + 's';
+    drop.style.animationDelay = Math.random() * 2 + 's';
+    container.appendChild(drop);
+  }
+}
+
 // Particles
 function createParticles() {
   const container = document.getElementById('particles');
   if (!container) return;
   
-  const colors = ['#ff4757', '#3742fa', '#2ed573', '#ffa502', '#a55eea'];
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B', '#a55eea'];
   
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 20; i++) {
     const particle = document.createElement('div');
     particle.className = 'particle';
-    const size = 4 + Math.random() * 8;
+    const size = 4 + Math.random() * 10;
     particle.style.width = size + 'px';
     particle.style.height = size + 'px';
     particle.style.left = (Math.random() * 100) + '%';
@@ -171,13 +232,17 @@ async function runLoadingScreen() {
   for (const step of steps) {
     if (loadingBar) loadingBar.style.width = step.progress + '%';
     if (loadingText) loadingText.textContent = step.text;
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise(r => setTimeout(r, 400));
   }
   
-  await new Promise(r => setTimeout(r, 400));
+  await new Promise(r => setTimeout(r, 500));
   
   if (loadingScreen) loadingScreen.classList.add('hidden');
   showScreen('menu-screen');
+  
+  // Initialize time/weather after loading
+  updateTimeAndWeather();
+  setInterval(updateTimeAndWeather, 60000); // Update every minute
 }
 
 // Utilities
@@ -194,7 +259,7 @@ function shuffle(arr) {
 }
 
 function getPlayerColor(idx) {
-  const colors = ['#ff4757', '#3742fa', '#2ed573', '#ffa502', '#a55eea'];
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B', '#a55eea'];
   return colors[idx % colors.length];
 }
 
@@ -229,7 +294,44 @@ function showGameMessage(text, duration = 1200) {
   setTimeout(() => { msgEl.style.display = 'none'; }, duration);
 }
 
-// Show Emote
+// ==================== EMOTE SYSTEM ====================
+function toggleEmotePanel(playerIndex) {
+  const panel = document.getElementById('emote-panel');
+  if (!panel) return;
+  
+  if (panel.classList.contains('active')) {
+    panel.classList.remove('active');
+    panel.dataset.targetPlayer = '';
+  } else {
+    panel.classList.add('active');
+    panel.dataset.targetPlayer = playerIndex;
+  }
+}
+
+function sendEmote(emoteKey) {
+  const panel = document.getElementById('emote-panel');
+  if (!panel) return;
+  
+  const emote = EMOTES[emoteKey] || '😊';
+  const playerIndex = parseInt(panel.dataset.targetPlayer) || 0;
+  
+  showEmote(playerIndex, emote);
+  playSound('emote');
+  
+  // Close panel
+  panel.classList.remove('active');
+  
+  // Bot responds with emote after delay
+  if (playerIndex === 0 && state.active) {
+    setTimeout(() => {
+      const randomBot = Math.floor(Math.random() * (state.players.length - 1)) + 1;
+      const responses = ['angry', 'laugh', 'cool'];
+      const randomEmote = responses[Math.floor(Math.random() * responses.length)];
+      showEmote(randomBot, EMOTES[randomEmote]);
+    }, 800 + Math.random() * 1000);
+  }
+}
+
 function showEmote(playerIndex, emote) {
   const zone = document.querySelector('.player-zone.player-' + getPositionClass(playerIndex));
   if (!zone) return;
@@ -246,7 +348,74 @@ function showEmote(playerIndex, emote) {
   
   setTimeout(() => {
     bubble.classList.remove('show');
-  }, 2000);
+  }, 2500);
+}
+
+// ==================== SKIN SYSTEM ====================
+function selectSkin(skin) {
+  if (!playerStats.skins.includes(skin) && skin !== 'classic') {
+    showGameMessage('Skin locked!');
+    return;
+  }
+  
+  playerStats.selectedSkin = skin;
+  
+  document.querySelectorAll('.skin-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.skin === skin);
+  });
+  
+  // Update all cards on screen
+  document.querySelectorAll('.uno-card').forEach(card => {
+    updateCardSkin(card);
+  });
+}
+
+function updateCardSkin(cardEl) {
+  cardEl.classList.remove('skin-neon', 'skin-minimal', 'skin-pixel');
+  if (playerStats.selectedSkin !== 'classic') {
+    cardEl.classList.add('skin-' + playerStats.selectedSkin);
+  }
+}
+
+// ==================== LEADERBOARD ====================
+function showLeaderboard() {
+  const modal = document.getElementById('leaderboard-modal');
+  const list = document.getElementById('leaderboard-list');
+  if (!modal || !list) return;
+  
+  // Generate demo leaderboard
+  const leaderboardData = [
+    { name: 'ProGamer99', score: 15420, isPlayer: false },
+    { name: 'CardMaster', score: 14850, isPlayer: false },
+    { name: 'UNO_King', score: 13200, isPlayer: false },
+    { name: 'LuckyDraw', score: 12100, isPlayer: false },
+    { name: 'SpeedDemon', score: 11500, isPlayer: false },
+    { name: playerStats.name, score: 8920, isPlayer: true },
+    { name: 'Newbie123', score: 7500, isPlayer: false },
+    { name: 'CardShark', score: 6800, isPlayer: false },
+  ].sort((a, b) => b.score - a.score);
+  
+  list.innerHTML = leaderboardData.map((item, idx) => {
+    let rankClass = '';
+    if (idx === 0) rankClass = 'gold';
+    else if (idx === 1) rankClass = 'silver';
+    else if (idx === 2) rankClass = 'bronze';
+    
+    return `
+      <div class="leaderboard-item ${item.isPlayer ? 'current-player' : ''}">
+        <div class="leaderboard-rank ${rankClass}">${idx + 1}</div>
+        <div class="leaderboard-name">${item.name}</div>
+        <div class="leaderboard-score">${item.score.toLocaleString()}</div>
+      </div>
+    `;
+  }).join('');
+  
+  modal.classList.add('active');
+}
+
+function closeLeaderboard() {
+  const modal = document.getElementById('leaderboard-modal');
+  if (modal) modal.classList.remove('active');
 }
 
 // ==================== FULLSCREEN FUNCTIONS ====================
@@ -260,7 +429,6 @@ function enterFullscreen() {
     elem.msRequestFullscreen();
   }
   
-  // Try to lock orientation to landscape
   if (screen.orientation && screen.orientation.lock) {
     screen.orientation.lock('landscape').catch(() => {});
   }
@@ -275,7 +443,6 @@ function exitFullscreen() {
     document.msExitFullscreen();
   }
   
-  // Unlock orientation
   if (screen.orientation && screen.orientation.unlock) {
     screen.orientation.unlock();
   }
@@ -333,6 +500,9 @@ function createDeck() {
 function renderCard(card, isBack = false) {
   const el = document.createElement('div');
   el.className = 'uno-card';
+  
+  // Apply skin
+  updateCardSkin(el);
 
   if (isBack) {
     el.classList.add('card-back');
@@ -341,15 +511,15 @@ function renderCard(card, isBack = false) {
       <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
          <defs>
           <linearGradient id="unoRedLocal${randId}" x1="0%" y1="0%" x2="100%" y2="100%">
-           <stop offset="0%" stop-color="#FF1744"/>
-           <stop offset="100%" stop-color="#D50000"/>
+           <stop offset="0%" stop-color="#FF3B5C"/>
+           <stop offset="100%" stop-color="#E6194B"/>
           </linearGradient>
          </defs>
          <g>
-          <rect width="240" height="360" rx="18" fill="#2d2d44"/>
-          <rect x="10" y="10" width="220" height="340" rx="12" fill="none" stroke="#ffffff" stroke-width="8"/>
+          <rect width="240" height="360" rx="18" fill="#1a1a2e"/>
+          <rect x="10" y="10" width="220" height="340" rx="12" fill="none" stroke="#ffffff" stroke-width="6"/>
           <ellipse cx="120" cy="180" rx="80" ry="140" fill="url(#unoRedLocal${randId})" transform="rotate(20 120 180)"/>
-          <text x="120" y="195" font-family="Arial Black, sans-serif" font-size="65" font-weight="900" fill="#ffd700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-15 120 190)">UNO</text>
+          <text x="120" y="195" font-family="Bebas Neue, Arial Black, sans-serif" font-size="60" font-weight="900" fill="#FFD43B" text-anchor="middle" dominant-baseline="middle" transform="rotate(-15 120 190)">UNO</text>
          </g>
         </svg>`;
     return el;
@@ -363,7 +533,7 @@ function renderCard(card, isBack = false) {
   else if (card.c === 'green') fill = 'url(#unoGreen)';
   else if (card.c === 'yellow') fill = 'url(#unoYellow)';
   else {
-    fill = '#2d2d44';
+    fill = '#1a1a2e';
     isWild = true;
   }
 
@@ -403,10 +573,10 @@ function renderCard(card, isBack = false) {
   if (isWild) {
     wildPattern = `
       <g transform="rotate(-50 120 180)">
-       <path fill="#0055aa" d="m120,180l0,-85a145,85 0 0 1 145,85l-145,0z"/>
-       <path fill="#2d801a" d="m120,180l145,0a145,85 0 0 1 -145,85l0,-85z"/>
-       <path fill="#ffcc00" d="m120,180l0,85a145,85 0 0 1 -145,-85l145,0z"/>
-       <path fill="#d50000" d="m120,180l-145,0a145,85 0 0 1 145,-85l0,85z"/>
+       <path fill="#4DABF7" d="m120,180l0,-85a145,85 0 0 1 145,85l-145,0z"/>
+       <path fill="#51CF66" d="m120,180l145,0a145,85 0 0 1 -145,85l0,-85z"/>
+       <path fill="#FFD43B" d="m120,180l0,85a145,85 0 0 1 -145,-85l145,0z"/>
+       <path fill="#FF3B5C" d="m120,180l-145,0a145,85 0 0 1 145,-85l0,85z"/>
        <ellipse stroke-width="4" stroke="#ffffff" fill="none" ry="85" rx="145" cy="180" cx="120"/>
       </g>`;
   }
@@ -564,7 +734,7 @@ function updatePlayerZones() {
       unoAlert.remove();
     }
     
-    // Bot cards display
+    // Bot cards display with fan-out
     if (idx !== 0) {
       const cardsContainer = zone.querySelector('.bot-cards-horizontal, .bot-cards-vertical');
       if (cardsContainer) {
@@ -696,15 +866,77 @@ function showActionFlash(type, color = null) {
   }
   
   overlay.className = 'action-flash-overlay ' + type;
-  
-  // Force reflow
   void overlay.offsetWidth;
-  
   overlay.classList.add('active');
   
   setTimeout(() => {
     overlay.classList.remove('active');
   }, 500);
+}
+
+function showSkipSymbol(playerIndex) {
+  const zone = document.querySelector('.player-zone.player-' + getPositionClass(playerIndex));
+  if (!zone) return;
+  
+  let skipSymbol = zone.querySelector('.skip-symbol');
+  if (!skipSymbol) {
+    skipSymbol = document.createElement('div');
+    skipSymbol.className = 'skip-symbol';
+    skipSymbol.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/></svg>`;
+    zone.appendChild(skipSymbol);
+  }
+  
+  skipSymbol.classList.add('show');
+  
+  setTimeout(() => {
+    skipSymbol.classList.remove('show');
+  }, 1200);
+}
+
+function showReverseSymbol() {
+  let reverseSymbol = document.getElementById('reverse-symbol');
+  if (!reverseSymbol) {
+    reverseSymbol = document.createElement('div');
+    reverseSymbol.id = 'reverse-symbol';
+    reverseSymbol.className = 'reverse-symbol';
+    reverseSymbol.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>`;
+    document.body.appendChild(reverseSymbol);
+  }
+  
+  reverseSymbol.classList.remove('show');
+  void reverseSymbol.offsetWidth;
+  reverseSymbol.classList.add('show');
+  
+  setTimeout(() => {
+    reverseSymbol.classList.remove('show');
+  }, 800);
+}
+
+// Wild Card Explosion Effect
+function createWildExplosion() {
+  const container = document.getElementById('wild-explosion');
+  if (!container) return;
+  
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B'];
+  const particleCount = 30;
+  
+  for (let i = 0; i < particleCount; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'wild-particle';
+    particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+    
+    const angle = (Math.PI * 2 * i) / particleCount;
+    const distance = 100 + Math.random() * 100;
+    const tx = Math.cos(angle) * distance;
+    const ty = Math.sin(angle) * distance;
+    
+    particle.style.setProperty('--tx', tx + 'px');
+    particle.style.setProperty('--ty', ty + 'px');
+    
+    container.appendChild(particle);
+    
+    setTimeout(() => particle.remove(), 800);
+  }
 }
 
 function showSkipSymbol(playerIndex) {
@@ -968,10 +1200,10 @@ function getCardDestination(playerIndex, gameTable) {
   const h = gameTable.offsetHeight;
   
   const positions = [
-    { x: w / 2, y: h - 50 },     // bottom
-    { x: 80, y: h / 2 },         // left
-    { x: w / 2, y: 80 },         // top
-    { x: w - 80, y: h / 2 }      // right
+    { x: w / 2, y: h - 50 },
+    { x: 80, y: h / 2 },
+    { x: w / 2, y: 80 },
+    { x: w - 80, y: h / 2 }
   ];
   
   return positions[playerIndex % positions.length];
@@ -995,7 +1227,7 @@ async function playCard(playerIndex, cardIndex) {
   }
   state.lastPlayTime = now;
   
-  // Show action effects
+  // Show action effects - Enhanced for Wild cards
   if (card.v === 'S') {
     playSound('skip');
     shakeTable();
@@ -1014,6 +1246,8 @@ async function playCard(playerIndex, cardIndex) {
   } else if (card.v === 'W' || card.v === '+4') {
     playSound('wild');
     showActionFlash('wild');
+    createWildExplosion(); // New effect
+    shakeTable();
   } else {
     playSound('card');
   }
@@ -1140,6 +1374,12 @@ async function botTurn() {
   
   const personality = BOT_PERSONALITIES[state.turn % BOT_PERSONALITIES.length];
   
+  // Random emote during turn
+  if (Math.random() < 0.2) {
+    const randomEmotes = ['think', 'cool', 'fire'];
+    showEmote(state.turn, EMOTES[randomEmotes[Math.floor(Math.random() * randomEmotes.length)]]);
+  }
+  
   if (state.drawStack > 0 && gameSettings.stacking) {
     const stackCardIdx = player.hand.findIndex(c => canStackCard(c));
     if (stackCardIdx !== -1) {
@@ -1166,17 +1406,9 @@ async function botTurn() {
   
   if (validMoves.length > 0) {
     if (personality === 'aggressive') {
-      validMoves.sort((a, b) => {
-        const aScore = getCardPriority(a.card);
-        const bScore = getCardPriority(b.card);
-        return bScore - aScore;
-      });
+      validMoves.sort((a, b) => getCardPriority(b.card) - getCardPriority(a.card));
     } else if (personality === 'defensive') {
-      validMoves.sort((a, b) => {
-        const aScore = getCardPriority(a.card);
-        const bScore = getCardPriority(b.card);
-        return aScore - bScore;
-      });
+      validMoves.sort((a, b) => getCardPriority(a.card) - getCardPriority(b.card));
     } else {
       validMoves.sort((a, b) => getCardPriority(b.card) - getCardPriority(a.card));
     }
@@ -1405,10 +1637,7 @@ function cancelMatchmaking() {
 
 async function startMatch() {
   initAudio();
-  
-  // Enter fullscreen when starting game
   enterFullscreen();
-  
   showScreen('game-app');
   await initGame();
 }
@@ -1494,15 +1723,15 @@ function createConfetti() {
   const container = document.getElementById('confetti-container');
   if (!container) return;
   
-  const colors = ['#ff4757', '#3742fa', '#2ed573', '#ffa502', '#a55eea'];
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B', '#a55eea'];
   
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 80; i++) {
     const confetti = document.createElement('div');
     confetti.className = 'confetti';
     confetti.style.left = Math.random() * 100 + '%';
     confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
     confetti.style.animationDelay = Math.random() * 1 + 's';
-    confetti.style.width = (5 + Math.random() * 8) + 'px';
+    confetti.style.width = (6 + Math.random() * 10) + 'px';
     confetti.style.height = confetti.style.width;
     confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
     container.appendChild(confetti);
@@ -1527,7 +1756,6 @@ function endGame(winnerIndex, isTimeUp) {
   stopTimer();
   stopGameTimer();
   
-  // Exit fullscreen when game ends
   exitFullscreen();
   
   const isWin = winnerIndex === 0;
@@ -1536,12 +1764,18 @@ function endGame(winnerIndex, isTimeUp) {
     createConfetti();
     playSound('win');
     vibrate([100, 50, 100, 50, 200]);
-    document.getElementById('result-emoji').innerHTML = '<svg width="50" height="50" viewBox="0 0 24 24" fill="#2ed573"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+    document.getElementById('result-icon').innerHTML = `
+      <div class="result-icon win">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      </div>`;
     showEmote(winnerIndex, getRandomEmote('win'));
   } else {
     playSound('lose');
     vibrate([200, 100, 200]);
-    document.getElementById('result-emoji').innerHTML = '<svg width="50" height="50" viewBox="0 0 24 24" fill="#ff4757"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>';
+    document.getElementById('result-icon').innerHTML = `
+      <div class="result-icon lose">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+      </div>`;
     showEmote(0, getRandomEmote('lose'));
   }
   
@@ -1560,7 +1794,7 @@ function endGame(winnerIndex, isTimeUp) {
   const resultsContainer = document.getElementById('results-container');
   if (resultsContainer) {
     resultsContainer.innerHTML = results.map((r, i) => 
-      '<div class="flex items-center gap-3 p-2 rounded-xl mb-2" style="background: ' + (r.isWinner ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255,255,255,0.03)') + '">' +
+      '<div class="flex items-center gap-3 p-2 rounded-xl mb-2" style="background: ' + (r.isWinner ? 'rgba(81, 207, 102, 0.15)' : 'rgba(255,255,255,0.03)') + '">' +
         '<div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs text-white" style="background: ' + (r.isWinner ? 'var(--uno-green)' : '#3d3d5c') + '">' + (i + 1) + '</div>' +
         '<div class="flex-1 font-bold text-xs" style="color: var(--fg);">' + r.name + '</div>' +
         '<div class="text-xs" style="color: var(--muted);">' + r.cards + ' cards</div>' +
@@ -1568,6 +1802,11 @@ function endGame(winnerIndex, isTimeUp) {
       '</div>'
     ).join('');
   }
+  
+  // Update XP
+  const xpGained = isWin ? 250 + (100 - state.players[0].hand.length * 10) : 50;
+  const xpValueEl = document.getElementById('xp-value');
+  if (xpValueEl) xpValueEl.textContent = '+' + xpGained;
   
   const gameOver = document.getElementById('game-over');
   if (gameOver) gameOver.classList.add('active');
@@ -1580,7 +1819,6 @@ document.addEventListener('DOMContentLoaded', () => {
   createParticles();
   runLoadingScreen();
   
-  // Check screen orientation on game screen
   setInterval(checkScreenOrientation, 1000);
   
   // Theme card clicks
@@ -1591,6 +1829,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Difficulty buttons
   document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', () => setDifficulty(btn.dataset.diff));
+  });
+  
+  // Skin buttons
+  document.querySelectorAll('.skin-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectSkin(btn.dataset.skin));
   });
   
   // Restart/Lobby buttons
@@ -1650,16 +1893,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Event Listener untuk Pop-up Draw
-  document.getElementById('keep-btn')?.addEventListener('click', () => {
-    handleKeepCard();
-  });
+  // Drawn card popup buttons
+  document.getElementById('keep-btn')?.addEventListener('click', handleKeepCard);
+  document.getElementById('play-btn')?.addEventListener('click', handlePlayDrawnCard);
   
-  document.getElementById('play-btn')?.addEventListener('click', () => {
-    handlePlayDrawnCard();
-  });
-  
-  // UNO button
+  // UNO button - Voice interaction style
   document.getElementById('uno-btn')?.addEventListener('click', () => {
     if (state.turn === 0 && state.players[0] && state.players[0].hand.length === 2 && state.active && !state.saidUno.has(0)) {
       state.saidUno.add(0);
@@ -1668,6 +1906,20 @@ document.addEventListener('DOMContentLoaded', () => {
       playSound('uno');
       vibrate(100);
       updatePlayerZones();
+      
+      // Penalty for others who forgot to say UNO
+      state.players.forEach((player, idx) => {
+        if (idx !== 0 && player.hand.length === 1 && !state.saidUno.has(idx)) {
+          // Bot forgot to say UNO - penalty
+          setTimeout(() => {
+            const penaltyCard = drawCards(2);
+            player.hand.push(...penaltyCard);
+            showEmote(idx, '😱');
+            showGameMessage(player.name + ' forgot UNO! +2 cards');
+            updatePlayerZones();
+          }, 500);
+        }
+      });
     }
   });
   
@@ -1742,8 +1994,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'd' || e.key === 'D') document.getElementById('draw-pile')?.click();
     if (e.key === 'Escape') {
       closeSettings();
+      closeLeaderboard();
       hideColorPicker3D();
       hideDrawnCardPopup();
+      document.getElementById('emote-panel')?.classList.remove('active');
+    }
+    // Number keys for emotes
+    if (e.key >= '1' && e.key <= '6') {
+      const emoteKeys = ['angry', 'laugh', 'cry', 'fire', 'cool', 'think'];
+      const idx = parseInt(e.key) - 1;
+      if (idx < emoteKeys.length && document.getElementById('emote-panel')?.classList.contains('active')) {
+        sendEmote(emoteKeys[idx]);
+      }
     }
   });
   
@@ -1756,6 +2018,24 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Landscape button
   document.getElementById('landscape-btn')?.addEventListener('click', activateLandscape);
+  
+  // Leaderboard tabs
+  document.querySelectorAll('.leaderboard-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.leaderboard-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      // In real app, would load different data
+    });
+  });
+  
+  // Close modals on backdrop click
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('active');
+      }
+    });
+  });
 });
 
 // Handle window resize
