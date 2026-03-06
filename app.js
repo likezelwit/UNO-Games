@@ -1,20 +1,4 @@
 // ==================== FIREBASE CONFIG ====================
-/*
- * Firebase Database Rules - Add this to your Firebase Console:
- * 
- * {
- *   "rules": {
- *     "lobbies": {
- *       ".indexOn": ["isPrivate", "status", "createdAt"]
- *     },
- *     "presence": {
- *       ".read": true,
- *       ".write": true
- *     }
- *   }
- * }
- */
-
 const firebaseConfig = {
   apiKey: "AIzaSyDU0rqDjPdMsjhS_7MmvCYaoPoXpqeqyRE",
   authDomain: "unno-f3338.firebaseapp.com",
@@ -38,14 +22,8 @@ const BOT_NAMES = ['Alex', 'Blake', 'Casey', 'Drew', 'Ellis', 'Flynn'];
 const TURN_TIME = 15;
 const GAME_TIME = 300;
 const AFK_TIMEOUT = 30000;
-const RECONNECT_TIMEOUT = 60000;
 const EMOTES = {
-  angry: '😠',
-  laugh: '😂',
-  cry: '😢',
-  fire: '🔥',
-  cool: '😎',
-  think: '🤔'
+  angry: '😠', laugh: '😂', cry: '😢', fire: '🔥', cool: '😎', think: '🤔'
 };
 
 // Game Settings
@@ -53,15 +31,6 @@ const gameSettings = {
   stacking: true,
   timer: true,
   sound: true
-};
-
-// Player Stats
-const playerStats = {
-  name: 'Player',
-  level: 12,
-  xp: 2450,
-  xpNeeded: 3000,
-  coins: 1250
 };
 
 // Game State
@@ -86,17 +55,15 @@ let state = {
   sortMode: null,
   dragCard: null,
   drawnCard: null,
-  drawnCardPlayable: false,
-  comboCount: 0,
-  lastPlayTime: 0
+  drawnCardPlayable: false
 };
 
 // Multiplayer State
 let multiplayerState = {
   isHost: false,
   lobbyId: null,
-  playerId: null,
-  playerName: 'Player_' + Math.random().toString(36).substr(2, 6),
+  playerId: 'player_' + Math.random().toString(36).substr(2, 9),
+  playerName: 'Player',
   playerIndex: 0,
   maxPlayers: 4,
   gameMode: 'classic',
@@ -107,36 +74,24 @@ let multiplayerState = {
   presenceRef: null,
   playerPresenceRef: null,
   lastActivity: Date.now(),
-  afkTimer: null,
-  reconnectTimer: null,
-  playerPositions: {},
-  isSearching: false,
-  searchRef: null,
-  callbacks: {}
+  afkTimer: null
 };
 
-// Audio Context
 let audioCtx = null;
 
 // ==================== INITIALIZATION ====================
 function initAudio() {
   if (!audioCtx) {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) {
-      console.log('Audio not supported');
-    }
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
   }
 }
 
 function playSound(type) {
   if (!audioCtx || !gameSettings.sound) return;
-  
   try {
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    osc.connect(g);
-    g.connect(audioCtx.destination);
+    osc.connect(g); g.connect(audioCtx.destination);
     const t = audioCtx.currentTime;
     
     const sounds = {
@@ -144,14 +99,11 @@ function playSound(type) {
       win: { type: 'sine', freq: [523, 659, 784, 1047], dur: 0.8, vol: 0.1 },
       lose: { type: 'sawtooth', freq: [200, 100], dur: 0.5, vol: 0.06 },
       draw: { type: 'sine', freq: [500, 400], dur: 0.08, vol: 0.05 },
-      tick: { type: 'sine', freq: [900, 900], dur: 0.06, vol: 0.04 },
-      deal: { type: 'triangle', freq: [600, 700], dur: 0.08, vol: 0.05 },
-      skip: { type: 'square', freq: [350, 450, 350], dur: 0.35, vol: 0.06 },
-      reverse: { type: 'sine', freq: [450, 550, 450], dur: 0.3, vol: 0.06 },
-      wild: { type: 'sine', freq: [350, 500, 700, 900], dur: 0.5, vol: 0.08 },
-      combo: { type: 'sine', freq: [700, 900, 1100], dur: 0.25, vol: 0.06 },
+      tick: { type: 'sine', freq: [900], dur: 0.06, vol: 0.04 },
+      skip: { type: 'square', freq: [350, 450], dur: 0.35, vol: 0.06 },
+      reverse: { type: 'sine', freq: [450, 550], dur: 0.3, vol: 0.06 },
+      wild: { type: 'sine', freq: [350, 500, 700], dur: 0.5, vol: 0.08 },
       uno: { type: 'sine', freq: [523, 659, 784], dur: 0.6, vol: 0.1 },
-      emote: { type: 'sine', freq: [600, 800], dur: 0.15, vol: 0.05 },
       join: { type: 'sine', freq: [400, 600, 800], dur: 0.3, vol: 0.08 },
       start: { type: 'sine', freq: [600, 800, 1000], dur: 0.4, vol: 0.1 }
     };
@@ -160,18 +112,13 @@ function playSound(type) {
     if (!s) return;
 
     osc.type = s.type;
-    
-    if (Array.isArray(s.freq) && s.freq.length > 1) {
+    if (Array.isArray(s.freq)) {
       const noteLength = s.dur / s.freq.length;
       s.freq.forEach((f, i) => {
-        const startTime = t + (i * noteLength);
-        osc.frequency.setValueAtTime(Math.max(1, f), startTime);
-        if (i < s.freq.length - 1) {
-          osc.frequency.exponentialRampToValueAtTime(Math.max(1, s.freq[i + 1]), startTime + noteLength);
-        }
+        osc.frequency.setValueAtTime(Math.max(1, f), t + (i * noteLength));
       });
     } else {
-      osc.frequency.setValueAtTime(Array.isArray(s.freq) ? s.freq[0] : s.freq, t);
+      osc.frequency.setValueAtTime(s.freq, t);
     }
     
     g.gain.setValueAtTime(s.vol, t);
@@ -183,15 +130,11 @@ function playSound(type) {
 }
 
 function vibrate(pattern) {
-  if (navigator.vibrate) {
-    navigator.vibrate(pattern);
-  }
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
 // ==================== UTILITY FUNCTIONS ====================
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -204,9 +147,7 @@ function shuffle(arr) {
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'UNO-';
-  for (let i = 0; i < 5; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
 }
 
@@ -218,7 +159,7 @@ function getPlayerColor(idx) {
 function getPositionClass(idx, totalPlayers) {
   if (totalPlayers === 2) return idx === 0 ? 'bottom' : 'top';
   if (totalPlayers === 3) {
-    const positions = ['bottom', 'right', 'left'];
+    const positions = ['bottom', 'right', 'left']; // P1, P2(bot), P3(bot) mapping for 3 players
     return positions[idx];
   }
   return ['bottom', 'left', 'top', 'right'][idx];
@@ -243,7 +184,7 @@ function showToast(message, duration = 2500) {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'toast-message';
-    toast.className = 'toast-message';
+    toast.className = 'toast'; // Uses CSS class from provided CSS
     document.body.appendChild(toast);
   }
   toast.textContent = message;
@@ -255,7 +196,6 @@ function showToast(message, duration = 2500) {
 function createParticles() {
   const container = document.getElementById('particles');
   if (!container) return;
-  
   const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B', '#a55eea'];
   
   for (let i = 0; i < 15; i++) {
@@ -294,8 +234,6 @@ async function runLoadingScreen() {
   await sleep(500);
   if (loadingScreen) loadingScreen.classList.add('hidden');
   showScreen('menu-screen');
-  
-  // Setup connection monitor
   setupConnectionMonitor();
 }
 
@@ -305,26 +243,15 @@ function setupConnectionMonitor() {
   connectedRef.on('value', (snap) => {
     const connected = snap.val() === true;
     updateConnectionStatus(connected);
-    
-    if (connected && multiplayerState.playerId && multiplayerState.lobbyId) {
-      setupPresence();
-    }
-    
-    if (!connected && state.active) {
-      showToast('Connection lost! Reconnecting...');
-    }
+    if (connected && multiplayerState.playerId && multiplayerState.lobbyId) setupPresence();
+    if (!connected && state.active) showToast('Connection lost! Reconnecting...');
   });
 }
 
 function updateConnectionStatus(connected) {
   let statusEl = document.getElementById('connection-status');
-  if (!statusEl) {
-    statusEl = document.createElement('div');
-    statusEl.id = 'connection-status';
-    statusEl.className = 'connection-status';
-    document.body.appendChild(statusEl);
-  }
-  
+  if (!statusEl) return;
+
   if (connected) {
     statusEl.className = 'connection-status connected';
     statusEl.innerHTML = '<div class="connection-dot"></div><span>Connected</span>';
@@ -334,141 +261,11 @@ function updateConnectionStatus(connected) {
   }
 }
 
-// ==================== DECK CREATION ====================
-function createDeck() {
-  let deck = [];
-  COLORS.forEach(color => {
-    deck.push({ c: color, v: '0' });
-    for (let i = 1; i <= 9; i++) {
-      deck.push({ c: color, v: i.toString() });
-      deck.push({ c: color, v: i.toString() });
-    }
-    SPECIAL_VALUES.forEach(value => {
-      deck.push({ c: color, v: value });
-      deck.push({ c: color, v: value });
-    });
-  });
-  for (let i = 0; i < 4; i++) {
-    deck.push({ c: 'black', v: 'W' });
-    deck.push({ c: 'black', v: '+4' });
-  }
-  return shuffle(deck);
-}
-
-// ==================== CARD RENDERING ====================
-function renderCard(card, isBack = false) {
-  const el = document.createElement('div');
-  el.className = 'uno-card';
-
-  if (isBack) {
-    el.classList.add('card-back');
-    const randId = Math.random().toString(36).substr(2, 9);
-    el.innerHTML = `
-      <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
-         <defs>
-          <linearGradient id="unoRedLocal${randId}" x1="0%" y1="0%" x2="100%" y2="100%">
-           <stop offset="0%" stop-color="#FF3B5C"/>
-           <stop offset="100%" stop-color="#E6194B"/>
-          </linearGradient>
-         </defs>
-         <g>
-          <rect width="240" height="360" rx="18" fill="#1a1a2e"/>
-          <rect x="10" y="10" width="220" height="340" rx="12" fill="none" stroke="#ffffff" stroke-width="6"/>
-          <ellipse cx="120" cy="180" rx="80" ry="140" fill="url(#unoRedLocal${randId})" transform="rotate(20 120 180)"/>
-          <text x="120" y="195" font-family="Bebas Neue, Arial Black, sans-serif" font-size="60" font-weight="900" fill="#FFD43B" text-anchor="middle" dominant-baseline="middle" transform="rotate(-15 120 190)">UNO</text>
-         </g>
-        </svg>`;
-    return el;
-  }
-
-  let fill = '';
-  let isWild = false;
-  
-  if (card.c === 'red') fill = 'url(#unoRed)';
-  else if (card.c === 'blue') fill = 'url(#unoBlue)';
-  else if (card.c === 'green') fill = 'url(#unoGreen)';
-  else if (card.c === 'yellow') fill = 'url(#unoYellow)';
-  else {
-    fill = '#1a1a2e';
-    isWild = true;
-  }
-
-  let centerContent = '';
-  let cornerValue = card.v;
-  let centerFontSize = 180;
-
-  if (card.v === 'S') {
-    cornerValue = '⊘';
-    centerFontSize = 120;
-    centerContent = `<text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" x="128" dy="8">${cornerValue}</text>
-                      <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">${cornerValue}</text>`;
-  } else if (card.v === 'R') {
-    cornerValue = '⟲';
-    centerFontSize = 120;
-    centerContent = `<text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" x="128" dy="8">${cornerValue}</text>
-                      <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">${cornerValue}</text>`;
-  } else if (card.v === '+2') {
-    centerFontSize = 120;
-    centerContent = `<text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" x="128" dy="8">+2</text>
-                      <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">+2</text>`;
-  } else if (card.v === 'W') {
-    cornerValue = 'W';
-    centerContent = '';
-  } else if (card.v === '+4') {
-    cornerValue = '+4';
-    centerContent = `<g transform="skewX(-10)">
-        <text stroke-width="10" stroke="#000000" dominant-baseline="middle" text-anchor="middle" fill="#000000" font-weight="900" font-size="100" font-family="Arial Black, sans-serif" y="186" x="152.41306">+4</text>
-        <text dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-weight="900" font-size="100" font-family="Arial Black, sans-serif" y="179" x="145.41306">+4</text>
-      </g>`;
-  } else {
-    centerContent = `<text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#000000" text-anchor="middle" dominant-baseline="middle" x="128" dy="8">${card.v}</text>
-                      <text y="196" font-family="Arial Black, sans-serif" font-size="${centerFontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle" x="120">${card.v}</text>`;
-  }
-
-  let wildPattern = '';
-  if (isWild) {
-    wildPattern = `
-      <g transform="rotate(-50 120 180)">
-       <path fill="#4DABF7" d="m120,180l0,-85a145,85 0 0 1 145,85l-145,0z"/>
-       <path fill="#51CF66" d="m120,180l145,0a145,85 0 0 1 -145,85l0,-85z"/>
-       <path fill="#FFD43B" d="m120,180l0,85a145,85 0 0 1 -145,-85l145,0z"/>
-       <path fill="#FF3B5C" d="m120,180l-145,0a145,85 0 0 1 145,-85l0,85z"/>
-       <ellipse stroke-width="4" stroke="#ffffff" fill="none" ry="85" rx="145" cy="180" cx="120"/>
-      </g>`;
-  }
-
-  let centerEllipse = '';
-  if (!isWild) {
-    centerEllipse = `<ellipse transform="rotate(-60.409 117.875 181.408)" stroke="#ffffff" cx="117.87508" cy="181.40815" rx="159.19945" ry="82.07582" fill="none" stroke-width="6"/>`;
-  }
-
-  el.innerHTML = `
-    <svg width="240" height="360" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360">
-     <g>
-      <rect x="0" y="0" width="240" height="360" rx="25" ry="25" fill="${fill}"/>
-      <rect x="10" y="10" width="220" height="340" rx="20" ry="20" fill="none" stroke="#ffffff" stroke-width="8"/>
-      ${centerEllipse}
-      ${wildPattern}
-      ${centerContent}
-      <g>
-       <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#000000" text-anchor="middle" x="44.67969" y="61">${cornerValue}</text>
-       <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle" y="58" x="41.67969">${cornerValue}</text>
-      </g>
-      <g transform="rotate(180 162 238)">
-       <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#000000" text-anchor="middle" x="45" y="61">${cornerValue}</text>
-       <text font-family="Arial Black, sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle" y="58" x="42">${cornerValue}</text>
-      </g>
-     </g>
-    </svg>`;
-
-  return el;
-}
-
 // ==================== MENU FUNCTIONS ====================
 function showMultiplayerOptions() {
-  // Corresponds to HTML onclick="showMultiplayerOptions()"
-  let modal = document.getElementById('multiplayer-options-modal');
+  const modal = document.getElementById('multiplayer-options-modal');
   if (modal) modal.classList.add('active');
+  initAudio();
 }
 
 function closeMultiplayerOptions() {
@@ -486,19 +283,16 @@ function closeSettings() {
   if (modal) modal.classList.remove('active');
 }
 
-function toggleSetting(settingKey) {
-  gameSettings[settingKey] = !gameSettings[settingKey];
-  const toggleBtn = document.getElementById('toggle-' + settingKey);
-  if (toggleBtn) {
-    toggleBtn.classList.toggle('active', gameSettings[settingKey]);
-  }
+function toggleSetting(setting) {
+  gameSettings[setting] = !gameSettings[setting];
+  const toggle = document.getElementById('toggle-' + setting);
+  if (toggle) toggle.classList.toggle('active', gameSettings[setting]);
 }
 
 function showLeaderboard() {
   const modal = document.getElementById('leaderboard-modal');
   if (modal) modal.classList.add('active');
-  // Optionally populate leaderboard data here
-  populateLeaderboard();
+  loadLeaderboard();
 }
 
 function closeLeaderboard() {
@@ -506,45 +300,37 @@ function closeLeaderboard() {
   if (modal) modal.classList.remove('active');
 }
 
-function populateLeaderboard() {
-    const list = document.getElementById('leaderboard-list');
-    if(!list) return;
-    // Dummy data for now
-    list.innerHTML = `
-        <div class="leaderboard-item current-player">
-            <div class="leaderboard-rank gold">1</div>
-            <div class="leaderboard-name">You</div>
-            <div class="leaderboard-score">12,450</div>
-        </div>
-        <div class="leaderboard-item">
-            <div class="leaderboard-rank silver">2</div>
-            <div class="leaderboard-name">Bot Alex</div>
-            <div class="leaderboard-score">11,200</div>
-        </div>
-         <div class="leaderboard-item">
-            <div class="leaderboard-rank bronze">3</div>
-            <div class="leaderboard-name">Bot Blake</div>
-            <div class="leaderboard-score">9,800</div>
-        </div>
-    `;
+function loadLeaderboard() {
+  const list = document.getElementById('leaderboard-list');
+  if (!list) return;
+  // Mock data for now
+  list.innerHTML = [
+    { name: 'Champion', score: 5200 },
+    { name: 'ProPlayer', score: 4800 },
+    { name: 'CardMaster', score: 4100 },
+    { name: multiplayerState.playerName, score: 2450 }
+  ].sort((a, b) => b.score - a.score).map((p, i) => `
+    <div class="leaderboard-item ${p.name === multiplayerState.playerName ? 'current-player' : ''}">
+      <div class="leaderboard-rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">${i + 1}</div>
+      <div class="leaderboard-name">${p.name}</div>
+      <div class="leaderboard-score">${p.score} XP</div>
+    </div>
+  `).join('');
 }
 
 // ==================== CREATE LOBBY ====================
 function showCreateLobby() {
   closeMultiplayerOptions();
-  
-  let modal = document.getElementById('create-lobby-modal');
-  if (!modal) {
-    // Modal creation logic if not present in HTML (though your HTML has it)
-    // In this case, we assume HTML has the modals defined based on your provided code.
-    // We just need to show it.
-    modal = document.getElementById('create-lobby-modal');
-  }
+  const modal = document.getElementById('create-lobby-modal');
   if (modal) modal.classList.add('active');
   
-  // Pre-fill name
-  const nameInput = document.getElementById('host-name');
-  if(nameInput && !nameInput.value) nameInput.value = multiplayerState.playerName;
+  // Attach listeners for mode/count buttons inside the modal
+  document.querySelectorAll('#create-lobby-modal .mode-btn, #create-lobby-modal .count-btn').forEach(btn => {
+    btn.onclick = function() {
+      this.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+    };
+  });
 }
 
 function closeCreateLobby() {
@@ -553,8 +339,8 @@ function closeCreateLobby() {
 }
 
 function togglePrivate() {
-    const toggle = document.getElementById('private-toggle');
-    if(toggle) toggle.classList.toggle('active');
+  const toggle = document.getElementById('private-toggle');
+  if (toggle) toggle.classList.toggle('active');
 }
 
 async function createLobby() {
@@ -568,13 +354,12 @@ async function createLobby() {
   multiplayerState.maxPlayers = parseInt(activeCount?.dataset.count) || 4;
   multiplayerState.isPrivate = privateToggle?.classList.contains('active') || false;
   multiplayerState.isHost = true;
-  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   
   const roomCode = generateRoomCode();
   multiplayerState.lobbyId = roomCode;
   
   closeCreateLobby();
-  showScreen('lobby-room');
+  showScreen('lobby-room'); // ID from HTML
   
   // Create lobby in Firebase
   const lobbyRef = database.ref('lobbies/' + roomCode);
@@ -611,7 +396,7 @@ async function createLobby() {
     showToast('Lobby created: ' + roomCode);
   } catch (error) {
     console.error('Error creating lobby:', error);
-    showToast('Failed to create lobby. Please try again.');
+    showToast('Failed to create lobby.');
     showScreen('menu-screen');
   }
 }
@@ -619,19 +404,21 @@ async function createLobby() {
 // ==================== JOIN LOBBY ====================
 function showJoinLobby() {
   closeMultiplayerOptions();
-  
-  let modal = document.getElementById('join-lobby-modal');
+  const modal = document.getElementById('join-lobby-modal');
   if (modal) modal.classList.add('active');
-  
-  const nameInput = document.getElementById('join-name');
-  if(nameInput && !nameInput.value) nameInput.value = multiplayerState.playerName;
-  
   refreshPublicLobbies();
 }
 
 function closeJoinLobby() {
   const modal = document.getElementById('join-lobby-modal');
   if (modal) modal.classList.remove('active');
+}
+
+function pasteCode() {
+  navigator.clipboard.readText().then(text => {
+    const input = document.getElementById('room-code-input');
+    if (input) input.value = text;
+  }).catch(err => showToast('Failed to paste'));
 }
 
 async function refreshPublicLobbies() {
@@ -641,45 +428,35 @@ async function refreshPublicLobbies() {
   listEl.innerHTML = '<div class="lobby-empty">Searching...</div>';
   
   try {
-    const snapshot = await database.ref('lobbies')
-      .orderByChild('isPrivate')
-      .equalTo(false)
-      .once('value');
-    
+    const snapshot = await database.ref('lobbies').orderByChild('isPrivate').equalTo(false).once('value');
     const lobbies = [];
     snapshot.forEach((child) => {
       const data = child.val();
       if (data.status === 'waiting') {
         const playerCount = data.playerOrder ? data.playerOrder.length : 0;
         if (playerCount < data.maxPlayers) {
-          lobbies.push({
-            id: child.key,
-            ...data,
-            playerCount: playerCount
-          });
+          lobbies.push({ id: child.key, ...data, playerCount });
         }
       }
     });
     
     if (lobbies.length === 0) {
-      listEl.innerHTML = '<div class="lobby-empty">No public lobbies available</div>';
+      listEl.innerHTML = '<div class="lobby-empty">No public lobbies found</div>';
       return;
     }
     
     listEl.innerHTML = lobbies.map(lobby => `
       <div class="lobby-item" onclick="joinLobbyById('${lobby.id}')">
-        <div class="lobby-code">${lobby.id}</div>
-        <div class="lobby-info">
-          <div class="lobby-mode">${lobby.gameMode || 'Classic'}</div>
-          <div class="lobby-players">${lobby.playerCount}/${lobby.maxPlayers} players</div>
+        <div class="lobby-item-info">
+          <div class="lobby-item-name">${lobby.id}</div>
+          <div class="lobby-item-host">Host: ${lobby.hostName}</div>
         </div>
-        <div class="lobby-host">by ${lobby.hostName}</div>
+        <div class="lobby-item-players">${lobby.playerCount}/${lobby.maxPlayers}</div>
       </div>
     `).join('');
     
   } catch (error) {
-    console.error('Error fetching lobbies:', error);
-    listEl.innerHTML = '<div class="lobby-empty">Failed to load lobbies</div>';
+    listEl.innerHTML = '<div class="lobby-empty">Error loading lobbies</div>';
   }
 }
 
@@ -690,8 +467,8 @@ async function joinLobbyByCode() {
   multiplayerState.playerName = nameInput?.value?.trim() || 'Player';
   const roomCode = codeInput?.value?.toUpperCase().trim();
   
-  if (!roomCode || roomCode.length < 8) {
-    showToast('Please enter a valid room code');
+  if (!roomCode) {
+    showToast('Please enter a room code');
     return;
   }
   
@@ -699,7 +476,6 @@ async function joinLobbyByCode() {
 }
 
 async function joinLobbyById(lobbyId) {
-  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   multiplayerState.lobbyId = lobbyId;
   multiplayerState.isHost = false;
   
@@ -713,26 +489,13 @@ async function joinLobbyById(lobbyId) {
     const snapshot = await lobbyRef.once('value');
     const lobbyData = snapshot.val();
     
-    if (!lobbyData) {
-      showToast('Lobby not found!');
-      showScreen('menu-screen');
-      return;
-    }
-    
-    if (lobbyData.status !== 'waiting') {
-      showToast('Game already in progress!');
-      showScreen('menu-screen');
-      return;
-    }
+    if (!lobbyData) { showToast('Lobby not found!'); showScreen('menu-screen'); return; }
+    if (lobbyData.status !== 'waiting') { showToast('Game already in progress!'); showScreen('menu-screen'); return; }
     
     const currentCount = lobbyData.playerOrder ? lobbyData.playerOrder.length : 0;
-    if (currentCount >= lobbyData.maxPlayers) {
-      showToast('Lobby is full!');
-      showScreen('menu-screen');
-      return;
-    }
+    if (currentCount >= lobbyData.maxPlayers) { showToast('Lobby is full!'); showScreen('menu-screen'); return; }
     
-    // Add player to lobby
+    // Add player
     const updates = {};
     updates['/players/' + multiplayerState.playerId] = {
       name: multiplayerState.playerName,
@@ -759,69 +522,79 @@ async function joinLobbyById(lobbyId) {
     showToast('Joined lobby: ' + lobbyId);
     
   } catch (error) {
-    console.error('Error joining lobby:', error);
     showToast('Failed to join lobby');
     showScreen('menu-screen');
   }
 }
 
 // ==================== QUICK MATCH ====================
-async function startQuickMatch() {
+function startQuickMatch() {
   closeMultiplayerOptions();
-  
   showScreen('quick-match-screen');
-  // Logic for quick match UI handling if needed, simplified here
-  // ... (Logic from your previous file can be pasted here if complex, 
-  // but for now using simplified flow)
-  multiplayerState.playerName = 'Player_' + Math.random().toString(36).substr(2, 4);
-  multiplayerState.playerId = 'player_' + Date.now();
-  multiplayerState.isQuickMatch = true;
+  performQuickMatch();
+}
 
-  // Try to find match or create
+async function performQuickMatch() {
+  multiplayerState.playerName = 'Player'; // Default for quick match
+  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  
   try {
     const snapshot = await database.ref('lobbies').orderByChild('isPrivate').equalTo(false).once('value');
-    let found = null;
-    snapshot.forEach(child => {
-        const d = child.val();
-        if(d.status === 'waiting' && d.playerOrder && d.playerOrder.length < d.maxPlayers) found = {id: child.key, ...d};
+    let foundLobby = null;
+    
+    snapshot.forEach((child) => {
+      const data = child.val();
+      if (data.status === 'waiting') {
+        const playerCount = data.playerOrder ? data.playerOrder.length : 0;
+        if (playerCount < data.maxPlayers && playerCount > 0) foundLobby = { id: child.key, ...data };
+      }
     });
-
-    if(found) {
-        // join
-        showScreen('menu-screen'); // go back to hide quick match screen if needed or handle transition
-        await joinLobbyById(found.id);
+    
+    if (foundLobby) {
+      showScreen('lobby-room'); // Switch screen before joining logic updates UI
+      await joinLobbyById(foundLobby.id);
     } else {
-        // create
-        multiplayerState.isHost = true;
-        const roomCode = generateRoomCode();
-        multiplayerState.lobbyId = roomCode;
-        // ... create lobby logic similar to createLobby()
-        // simplified:
-        const lobbyRef = database.ref('lobbies/' + roomCode);
-        multiplayerState.lobbyRef = lobbyRef;
-        const lobbyData = {
-            hostId: multiplayerState.playerId,
-            hostName: multiplayerState.playerName,
-            gameMode: 'classic',
-            maxPlayers: 4,
-            isPrivate: false,
-            status: 'waiting',
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            players: { [multiplayerState.playerId]: { name: multiplayerState.playerName, isHost: true, isReady: true, isBot: false, isConnected: true } },
-            playerOrder: [multiplayerState.playerId]
-        };
-        await lobbyRef.set(lobbyData);
-        multiplayerState.playerIndex = 0;
-        showScreen('lobby-room');
-        updateLobbyUI();
-        setupLobbyListeners();
-        setupPresence();
-        showToast('Created lobby: ' + roomCode);
+      // Create new quick match lobby
+      multiplayerState.isHost = true;
+      multiplayerState.isPrivate = false;
+      multiplayerState.gameMode = 'classic';
+      multiplayerState.maxPlayers = 4;
+      multiplayerState.playerName = 'Player';
+      
+      const roomCode = generateRoomCode();
+      multiplayerState.lobbyId = roomCode;
+      showScreen('lobby-room');
+      
+      const lobbyRef = database.ref('lobbies/' + roomCode);
+      multiplayerState.lobbyRef = lobbyRef;
+      
+      const lobbyData = {
+        hostId: multiplayerState.playerId,
+        hostName: multiplayerState.playerName,
+        gameMode: 'classic',
+        maxPlayers: 4,
+        isPrivate: false,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        status: 'waiting',
+        isQuickMatch: true,
+        players: {
+          [multiplayerState.playerId]: {
+            name: multiplayerState.playerName, isHost: true, isReady: true, isBot: false, isConnected: true
+          }
+        },
+        playerOrder: [multiplayerState.playerId]
+      };
+      
+      await lobbyRef.set(lobbyData);
+      multiplayerState.playerIndex = 0;
+      updateLobbyUI();
+      setupLobbyListeners();
+      setupPresence();
+      playSound('join');
     }
-  } catch(e) {
-      console.error(e);
-      showToast('Error finding match');
-      showScreen('menu-screen');
+  } catch (error) {
+    showToast('Quick match failed');
+    showScreen('menu-screen');
   }
 }
 
@@ -829,27 +602,19 @@ function cancelQuickMatch() {
   showScreen('menu-screen');
 }
 
-// ==================== LOBBY UI ====================
+// ==================== LOBBY UI & LOGIC ====================
 function updateLobbyUI() {
   const codeEl = document.getElementById('display-room-code');
+  const miniCodeEl = document.getElementById('room-code-mini');
   if (codeEl) codeEl.textContent = multiplayerState.lobbyId;
-  
-  const miniCode = document.getElementById('room-code-mini');
-  if (miniCode) miniCode.textContent = multiplayerState.lobbyId;
+  if (miniCodeEl) miniCodeEl.textContent = multiplayerState.lobbyId;
 }
 
 function copyRoomCode() {
-    navigator.clipboard.writeText(multiplayerState.lobbyId).then(() => {
-        showToast('Room code copied!');
-        playSound('card');
-    }).catch(() => showToast('Failed to copy'));
-}
-
-function pasteCode() {
-    navigator.clipboard.readText().then(text => {
-        const input = document.getElementById('room-code-input');
-        if(input) input.value = text;
-    }).catch(err => console.log('Failed to read clipboard'));
+  navigator.clipboard.writeText(multiplayerState.lobbyId).then(() => {
+    showToast('Room code copied!');
+    playSound('card');
+  }).catch(() => showToast('Failed to copy'));
 }
 
 function renderLobbyPlayers(players, playerOrder) {
@@ -858,7 +623,6 @@ function renderLobbyPlayers(players, playerOrder) {
   
   const maxPlayers = multiplayerState.maxPlayers;
   const orderedPlayers = playerOrder || Object.keys(players);
-  
   let html = '';
   
   for (let i = 0; i < maxPlayers; i++) {
@@ -870,114 +634,94 @@ function renderLobbyPlayers(players, playerOrder) {
       const statusClass = player.isReady ? 'ready' : 'not-ready';
       
       html += `
-        <div class="lobby-player-slot ${statusClass} ${isYou ? 'you' : ''}">
-          <div class="player-avatar-large" style="background: ${getPlayerColor(i)}">
-            ${player.isBot ? '🤖' : '👤'}
+        <div class="lobby-player-slot filled ${isYou ? 'you' : ''} ${player.isHost ? 'host' : ''}">
+          <div class="slot-avatar" style="background: ${getPlayerColor(i)}">
+             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="white"/></svg>
           </div>
-          <div class="player-slot-name">${player.name}${isYou ? ' (You)' : ''}</div>
-          ${player.isHost ? '<div class="host-badge">HOST</div>' : ''}
-          <div class="player-status ${player.isReady ? 'ready' : ''}">
-            ${player.isReady ? '✓ Ready' : 'Waiting...'}
-          </div>
-          ${isYou || !multiplayerState.isHost ? '' : `<button class="kick-btn" onclick="kickPlayer('${playerId}')">✕</button>`}
-        </div>
-      `;
+          <span class="slot-name">${player.name}${isYou ? ' (You)' : ''}</span>
+          <span class="slot-status">${player.isReady ? 'Ready' : 'Waiting...'}</span>
+          ${!isYou && multiplayerState.isHost ? `<button class="kick-btn" onclick="kickPlayer('${playerId}')">×</button>` : ''}
+        </div>`;
     } else {
       html += `
         <div class="lobby-player-slot empty">
-          <div class="player-avatar-large empty">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <div class="slot-avatar empty">
+             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           </div>
-          <div class="player-slot-name">Waiting...</div>
-          <div class="player-status">Empty Slot</div>
-        </div>
-      `;
+          <span class="slot-name">Waiting...</span>
+          <span class="slot-status">Empty Slot</span>
+        </div>`;
     }
   }
-  
   grid.innerHTML = html;
 }
 
 function setupLobbyListeners() {
   if (!multiplayerState.lobbyRef) return;
   
-  multiplayerState.lobbyRef.child('players').on('value', (snapshot) => {
-    const players = snapshot.val();
-    if (!players) return;
-    multiplayerState.lobbyRef.child('playerOrder').once('value', (orderSnap) => {
-      const playerOrder = orderSnap.val() || Object.keys(players);
-      renderLobbyPlayers(players, playerOrder);
-      updateStartButton(players, playerOrder);
-    });
-  });
-  
-  multiplayerState.lobbyRef.child('playerOrder').on('value', (snapshot) => {
-    const playerOrder = snapshot.val();
-    multiplayerState.lobbyRef.child('players').once('value', (playersSnap) => {
-      const players = playersSnap.val();
-      if (players) {
-        renderLobbyPlayers(players, playerOrder);
-        updateStartButton(players, playerOrder);
-      }
-    });
-  });
-  
-  multiplayerState.lobbyRef.child('status').on('value', (snapshot) => {
-    const status = snapshot.val();
-    if (status === 'playing') {
-      startGameFromLobby();
+  multiplayerState.lobbyRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+    
+    multiplayerState.maxPlayers = data.maxPlayers;
+    multiplayerState.gameMode = data.gameMode;
+    
+    const modeDisplay = document.getElementById('lobby-mode-display');
+    if (modeDisplay) modeDisplay.textContent = data.gameMode.charAt(0).toUpperCase() + data.gameMode.slice(1) + ' Mode';
+    
+    const countDisplay = document.getElementById('lobby-player-count');
+    const maxDisplay = document.getElementById('lobby-max-players');
+    if (countDisplay) countDisplay.textContent = data.playerOrder ? data.playerOrder.length : 0;
+    if (maxDisplay) maxDisplay.textContent = data.maxPlayers;
+    
+    if (data.players) {
+      renderLobbyPlayers(data.players, data.playerOrder);
+      updateStartButton(data.players);
     }
+    
+    if (data.status === 'playing') startGameFromLobby();
+  });
+  
+  // Chat listener
+  multiplayerState.lobbyRef.child('chat').limitToLast(50).on('child_added', (snap) => {
+    const msg = snap.val();
+    if (msg) displayChatMessage(msg);
   });
 }
 
-function updateStartButton(players, playerOrder) {
+function updateStartButton(players) {
   const startBtn = document.getElementById('start-game-btn');
-  const readyBtn = document.getElementById('ready-btn'); // Note: HTML might need a Ready button or use Start button
-  
+  const changeTeamBtn = document.getElementById('change-team-btn');
   if (!startBtn) return;
   
-  const playerCount = playerOrder ? playerOrder.length : Object.keys(players).length;
-  const allReady = Object.values(players).every(p => p.isReady || p.isBot);
-  const minPlayers = 2; // Or dynamic based on mode
-  
-  const canStart = multiplayerState.isHost && playerCount >= minPlayers && allReady;
+  const playerCount = Object.keys(players).length;
+  const allReady = Object.values(players).every(p => p.isReady);
+  const canStart = multiplayerState.isHost && playerCount >= 1 && allReady; // For testing, allow 1 player start
   
   startBtn.disabled = !canStart;
   
-  // Update lobby status text
-  const statusEl = document.getElementById('lobby-status');
-  if(statusEl) statusEl.textContent = canStart ? 'Ready to start!' : 'Waiting for players...';
+  // Logic for team mode if needed
+  if (multiplayerState.gameMode === 'team') {
+    changeTeamBtn.style.display = 'block';
+  } else {
+    changeTeamBtn.style.display = 'none';
+  }
 }
 
 async function toggleReady() {
   if (!multiplayerState.lobbyRef || !multiplayerState.playerId) return;
-  
   const playerRef = multiplayerState.lobbyRef.child('players/' + multiplayerState.playerId);
-  const snapshot = await playerRef.once('value');
-  const playerData = snapshot.val();
-  
-  if (playerData) {
-    await playerRef.update({ isReady: !playerData.isReady });
-    playSound('card');
-  }
+  const snap = await playerRef.once('value');
+  if (snap.val()) await playerRef.update({ isReady: !snap.val().isReady });
+}
+
+function changeTeam() {
+  showToast("Team switching coming soon!");
 }
 
 async function kickPlayer(playerId) {
   if (!multiplayerState.isHost || !multiplayerState.lobbyRef) return;
-  
-  const snapshot = await multiplayerState.lobbyRef.once('value');
-  const lobbyData = snapshot.val();
-  
-  if (!lobbyData) return;
-  
-  const newOrder = (lobbyData.playerOrder || []).filter(id => id !== playerId);
-  
-  const updates = {};
-  updates['/players/' + playerId] = null;
-  updates['/playerOrder'] = newOrder;
-  
-  await multiplayerState.lobbyRef.update(updates);
-  playSound('card');
+  await multiplayerState.lobbyRef.child('players/' + playerId).remove();
   showToast('Player kicked');
 }
 
@@ -989,24 +733,9 @@ async function leaveLobby() {
 function cleanupLobby() {
   if (multiplayerState.lobbyRef && multiplayerState.playerId) {
     multiplayerState.lobbyRef.child('players/' + multiplayerState.playerId).remove();
-    multiplayerState.lobbyRef.child('playerOrder').once('value', (snapshot) => {
-      const order = snapshot.val() || [];
-      const newOrder = order.filter(id => id !== multiplayerState.playerId);
-      
-      if (newOrder.length === 0) {
-        multiplayerState.lobbyRef.remove();
-      } else {
-        multiplayerState.lobbyRef.child('playerOrder').set(newOrder);
-        if (multiplayerState.isHost) {
-          const newHostId = newOrder[0];
-          multiplayerState.lobbyRef.child('hostId').set(newHostId);
-          multiplayerState.lobbyRef.child('players/' + newHostId + '/isHost').set(true);
-        }
-      }
-    });
+    // If host leaves and lobby empty, it will clean up or reassign host logic needed
     multiplayerState.lobbyRef.off();
   }
-  
   if (multiplayerState.playerPresenceRef) {
     multiplayerState.playerPresenceRef.remove();
     multiplayerState.playerPresenceRef.off();
@@ -1015,7 +744,32 @@ function cleanupLobby() {
   multiplayerState.lobbyRef = null;
   multiplayerState.lobbyId = null;
   multiplayerState.isHost = false;
-  multiplayerState.playerIndex = 0;
+}
+
+// ==================== CHAT ====================
+function displayChatMessage(msg) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  
+  const div = document.createElement('div');
+  div.className = 'chat-message';
+  div.innerHTML = `<span class="chat-message-sender">${msg.sender}:</span> <span class="chat-message-text">${msg.text}</span>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  if (!input || !multiplayerState.lobbyRef) return;
+  const text = input.value.trim();
+  if (!text) return;
+  
+  await multiplayerState.lobbyRef.child('chat').push({
+    sender: multiplayerState.playerName,
+    text: text,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+  input.value = '';
 }
 
 // ==================== PRESENCE ====================
@@ -1028,13 +782,10 @@ function setupPresence() {
   presenceRef.set({
     online: true,
     lastSeen: firebase.database.ServerValue.TIMESTAMP,
-    playerName: multiplayerState.playerName
+    name: multiplayerState.playerName
   });
   
-  presenceRef.onDisconnect().update({
-    online: false,
-    lastSeen: firebase.database.ServerValue.TIMESTAMP
-  });
+  presenceRef.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
   
   if (multiplayerState.lobbyRef) {
     multiplayerState.lobbyRef.child('players/' + multiplayerState.playerId + '/isConnected').set(true);
@@ -1042,22 +793,79 @@ function setupPresence() {
   }
 }
 
-// ==================== GAME LOGIC ====================
+// ==================== GAME FLOW ====================
+async function startMultiplayerGame() {
+  if (!multiplayerState.isHost || !multiplayerState.lobbyRef) return;
+  
+  const snapshot = await multiplayerState.lobbyRef.once('value');
+  const lobbyData = snapshot.val();
+  if (!lobbyData || lobbyData.status !== 'waiting') return;
+  
+  // Create deck and initial state
+  const deck = createDeck();
+  const startCard = deck.pop();
+  
+  const playerHands = {};
+  lobbyData.playerOrder.forEach(pid => {
+    playerHands[pid] = [];
+    for (let i = 0; i < 7; i++) playerHands[pid].push(deck.pop());
+  });
+  
+  const gameData = {
+    deck: deck,
+    discard: [startCard],
+    activeColor: startCard.c === 'black' ? 'red' : startCard.c, // Fallback for wild start
+    turn: 0,
+    direction: 1,
+    drawStack: 0,
+    stackType: null,
+    playerOrder: lobbyData.playerOrder,
+    playerHands: playerHands,
+    playerData: lobbyData.players,
+    status: 'playing',
+    startedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+  
+  await multiplayerState.lobbyRef.update({ status: 'playing' });
+  await multiplayerState.lobbyRef.child('game').set(gameData);
+  playSound('start');
+}
+
 function startGameFromLobby() {
   showScreen('game-app');
   initAudio();
-  
   multiplayerState.gameRef = multiplayerState.lobbyRef.child('game');
   setupGameListeners();
+  startAfkTimer();
+  document.addEventListener('click', updateActivity);
 }
 
+function createDeck() {
+  let deck = [];
+  COLORS.forEach(color => {
+    deck.push({ c: color, v: '0' });
+    for (let i = 1; i <= 9; i++) {
+      deck.push({ c: color, v: i.toString() });
+      deck.push({ c: color, v: i.toString() });
+    }
+    SPECIAL_VALUES.forEach(value => {
+      deck.push({ c: color, v: value });
+      deck.push({ c: color, v: value });
+    });
+  });
+  for (let i = 0; i < 4; i++) {
+    deck.push({ c: 'black', v: 'W' });
+    deck.push({ c: 'black', v: '+4' });
+  }
+  return shuffle(deck);
+}
+
+// ==================== GAME SYNC ====================
 function setupGameListeners() {
   if (!multiplayerState.gameRef) return;
-  
   multiplayerState.gameRef.on('value', (snapshot) => {
     const gameData = snapshot.val();
     if (!gameData) return;
-    
     syncGameState(gameData);
   });
 }
@@ -1065,20 +873,18 @@ function setupGameListeners() {
 function syncGameState(gameData) {
   const playerOrder = gameData.playerOrder;
   const myIndex = playerOrder.indexOf(multiplayerState.playerId);
-  
   multiplayerState.playerIndex = myIndex;
   
-  state.players = playerOrder.map((playerId, idx) => {
-    const pData = gameData.playerData[playerId];
-    const hand = gameData.playerHands[playerId] || [];
-    
+  // Build players array
+  state.players = playerOrder.map((pid, idx) => {
+    const pData = gameData.playerData[pid];
+    const hand = gameData.playerHands[pid] || [];
     return {
-      id: playerId,
+      id: pid,
       name: pData.name,
       hand: hand,
       isBot: pData.isBot || false,
-      isConnected: pData.isConnected !== false,
-      isHost: pData.isHost
+      isConnected: pData.isConnected !== false
     };
   });
   
@@ -1096,41 +902,99 @@ function syncGameState(gameData) {
   updateUI();
   updatePlayerZones();
   
+  // My turn logic
   if (state.turn === myIndex && !state.players[myIndex].isBot) {
-    // startTimer();
+    startTimer();
+    vibrate(100);
+  } else {
+    stopTimer();
+  }
+  
+  // Bot turn check (host handles bots)
+  const currentPlayer = state.players[state.turn];
+  if (currentPlayer && (currentPlayer.isBot || !currentPlayer.isConnected) && multiplayerState.isHost) {
+    setTimeout(botTurn, 1000);
   }
 }
 
-async function startMultiplayerGame() {
-    // Logic for host to initialize game in Firebase
-    if(!multiplayerState.isHost) return;
-    
-    const deck = createDeck();
-    const startCard = deck.pop();
-    
-    const playerHands = {};
-    const snapshot = await multiplayerState.lobbyRef.once('value');
-    const lobbyData = snapshot.val();
-    
-    lobbyData.playerOrder.forEach(pid => {
-        playerHands[pid] = [];
-        for(let i=0; i<7; i++) playerHands[pid].push(deck.pop());
-    });
+async function sendGameAction(actionType, actionData) {
+  if (!multiplayerState.gameRef) return;
+  await multiplayerState.gameRef.child('lastAction').set({
+    type: actionType,
+    playerId: multiplayerState.playerId,
+    data: actionData,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
 
-    const gameData = {
-        deck: deck,
-        discard: [startCard],
-        activeColor: startCard.c,
-        turn: 0,
-        direction: 1,
-        playerOrder: lobbyData.playerOrder,
-        playerHands: playerHands,
-        playerData: lobbyData.players,
-        status: 'playing'
+// ==================== CARD RENDERING ====================
+function renderCard(card, isBack = false) {
+  const el = document.createElement('div');
+  el.className = 'uno-card';
+
+  if (isBack) {
+    el.classList.add('card-back');
+    el.innerHTML = `<svg viewBox="0 0 240 360"><rect width="240" height="360" rx="25" fill="#1a1a2e"/><rect x="10" y="10" width="220" height="340" rx="20" fill="none" stroke="#fff" stroke-width="4"/><text x="120" y="190" font-family="Bebas Neue" font-size="60" fill="var(--uno-red)" text-anchor="middle">UNO</text></svg>`;
+    return el;
+  }
+
+  let fill = '';
+  if (card.c === 'red') fill = 'url(#unoRed)';
+  else if (card.c === 'blue') fill = 'url(#unoBlue)';
+  else if (card.c === 'green') fill = 'url(#unoGreen)';
+  else if (card.c === 'yellow') fill = 'url(#unoYellow)';
+  else fill = '#222'; 
+
+  const isWild = card.c === 'black';
+  let displayValue = card.v;
+  
+  // Simplified SVG for readability in code, but matches CSS styles
+  el.innerHTML = `
+    <svg viewBox="0 0 240 360">
+      <rect width="240" height="360" rx="25" fill="${fill}"/>
+      <rect x="10" y="10" width="220" height="340" rx="20" fill="none" stroke="#fff" stroke-width="8"/>
+      ${!isWild ? `<ellipse cx="120" cy="180" rx="100" ry="150" fill="none" stroke="#fff" stroke-width="10" transform="rotate(-30 120 180)"/>` : ''}
+      <text x="120" y="200" font-family="Bebas Neue, sans-serif" font-size="${isWild ? 60 : 120}" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="middle" stroke="#000" stroke-width="2">${displayValue}</text>
+      <text x="40" y="60" font-family="Bebas Neue" font-size="40" fill="#fff" stroke="#000" stroke-width="1">${displayValue}</text>
+    </svg>`;
+  return el;
+}
+
+function renderHand() {
+  const handContainer = document.getElementById('player-hand');
+  if (!handContainer) return;
+  handContainer.innerHTML = '';
+  
+  const player = state.players[multiplayerState.playerIndex];
+  if (!player) return;
+  
+  const isMyTurn = state.turn === multiplayerState.playerIndex;
+  
+  player.hand.forEach((card, idx) => {
+    const el = renderCard(card);
+    let isValid = false;
+    
+    if (isMyTurn && state.active && !player.isBot) {
+      if (state.drawStack > 0 && gameSettings.stacking) {
+        isValid = canStackCard(card);
+      } else {
+        isValid = checkValidPlay(card);
+      }
+    }
+    
+    if (isValid) el.classList.add('playable');
+    
+    el.onclick = async function() {
+      if (!state.active || state.turn !== multiplayerState.playerIndex || player.isBot) return;
+      if (isValid) await playCard(multiplayerState.playerIndex, idx);
+      else {
+        el.classList.add('shake');
+        setTimeout(() => el.classList.remove('shake'), 500);
+      }
     };
-
-    await multiplayerState.lobbyRef.update({ status: 'playing' });
-    await multiplayerState.gameRef.set(gameData);
+    
+    handContainer.appendChild(el);
+  });
 }
 
 function checkValidPlay(card) {
@@ -1142,125 +1006,602 @@ function checkValidPlay(card) {
   return false;
 }
 
-function renderHand() {
-    const container = document.getElementById('player-hand');
-    if(!container) return;
-    container.innerHTML = '';
-    
-    const myPlayer = state.players[multiplayerState.playerIndex];
-    if(!myPlayer) return;
-    
-    myPlayer.hand.forEach((card, idx) => {
-        const el = renderCard(card);
-        const isValid = checkValidPlay(card);
-        
-        if(state.turn === multiplayerState.playerIndex && state.active && isValid) {
-            el.classList.add('playable');
-            el.onclick = () => playCardLocal(idx);
-        }
-        container.appendChild(el);
-    });
+function canStackCard(card) {
+  if (!gameSettings.stacking) return false;
+  if (state.stackType === '+2') return card.v === '+2' || card.v === '+4';
+  if (state.stackType === '+4') return card.v === '+4';
+  return false;
 }
 
-async function playCardLocal(index) {
-    // Send play action to Firebase
-    // Simplified for brevity
-    console.log("Playing card", index);
-}
-
-function updateUI() {
-    const discardPile = document.getElementById('discard-pile');
-    if (discardPile) {
-        const top = state.discard[state.discard.length - 1];
-        if(top) {
-            discardPile.innerHTML = '';
-            discardPile.appendChild(renderCard(top));
-        }
-    }
-    
-    const deckCount = document.getElementById('deck-count');
-    if(deckCount) deckCount.textContent = state.deck.length;
-    
-    updateTurnIndicator();
-}
-
-function updateTurnIndicator() {
-    const indicator = document.getElementById('turn-indicator');
-    const text = document.getElementById('turn-text');
-    if(!indicator) return;
-    
-    if(state.active) {
-        indicator.style.display = 'flex';
-        if(state.turn === multiplayerState.playerIndex) {
-            text.textContent = 'Your Turn';
-        } else {
-            text.textContent = (state.players[state.turn]?.name || 'Player') + "'s Turn";
-        }
+// ==================== GAME ACTIONS ====================
+async function playCard(playerIndex, cardIndex) {
+  const player = state.players[playerIndex];
+  if (!player) return;
+  
+  const card = player.hand.splice(cardIndex, 1)[0];
+  state.discard.push(card);
+  
+  // Stacking logic
+  if (gameSettings.stacking) {
+    if (card.v === '+2') { state.drawStack += 2; state.stackType = '+2'; }
+    else if (card.v === '+4') { state.drawStack += 4; state.stackType = '+4'; }
+    else { state.drawStack = 0; state.stackType = null; }
+  }
+  
+  // Wild Logic
+  if (card.c === 'black') {
+    if (playerIndex === multiplayerState.playerIndex) {
+      state.pendingWild = card;
+      showColorPicker3D();
+      updateUI();
+      return;
     } else {
-        indicator.style.display = 'none';
+      // Bot or other player picked wild - handled by their logic
+      // If we are host simulating bot, we choose color later
     }
+  } else {
+    state.activeColor = card.c;
+  }
+  
+  // Win Check
+  if (player.hand.length === 0) {
+    await endMultiplayerGame(playerIndex);
+    return;
+  }
+  
+  // UNO Check
+  if (player.hand.length === 1) state.saidUno.add(playerIndex);
+  
+  // Apply effects & Advance
+  await applyCardEffect(card, playerIndex);
+  await advanceTurn();
+  
+  // Sync to DB
+  if (multiplayerState.gameRef) {
+    const updates = {
+      turn: state.turn, direction: state.direction, discard: state.discard,
+      deck: state.deck, activeColor: state.activeColor, drawStack: state.drawStack,
+      stackType: state.stackType, playerHands: {}
+    };
+    state.players.forEach(p => updates.playerHands[p.id] = p.hand);
+    await multiplayerState.gameRef.update(updates);
+  }
+  
+  // Effects
+  playSound(card.v === 'S' ? 'skip' : card.v === 'R' ? 'reverse' : 'card');
+  vibrate(50);
+  updateUI();
+  renderHand();
+}
+
+async function selectWildColor(color) {
+  state.activeColor = color;
+  hideColorPicker3D();
+  
+  if (multiplayerState.gameRef) await multiplayerState.gameRef.update({ activeColor: color });
+  
+  await applyCardEffect(state.pendingWild, multiplayerState.playerIndex);
+  state.pendingWild = null;
+  await advanceTurn();
+  
+  playSound('wild');
+  createWildExplosion();
+}
+
+async function applyCardEffect(card, currentPlayerIndex) {
+  const nextIdx = getNextPlayerIndex();
+  const nextPlayer = state.players[nextIdx];
+  
+  if (state.drawStack === 0 || !gameSettings.stacking) {
+    if (card.v === 'S') {
+      showGameMessage(nextPlayer.name + ' Skipped!');
+      state.turn = nextIdx; // Skip doubles turn advance? No, advanceTurn handles it. Logic: Skip jumps over next.
+      // Effectively: playCard -> advanceTurn moves to next. Skip needs to move one extra.
+      // Simplified: state.turn becomes nextIdx. Then advanceTurn moves again.
+      // But normally: current plays Skip. Next player is skipped.
+      // We set state.turn = nextIdx (the skipped person) and then advanceTurn will move to the person after them? 
+      // Or advanceTurn logic should handle this.
+      // Standard logic: 
+      // playCard -> ... -> advanceTurn.
+      // If Skip: next player index = current + direction. 
+      // Turn should become that skipped player, then advanceTurn moves again? 
+      // Actually, easiest is: if Skip, state.turn = nextIdx (skipped). Then advanceTurn moves to next. 
+      // But we must ensure advanceTurn logic doesn't skip the skipped person again.
+      // Let's just modify advanceTurn to handle current player context? 
+      // Better: `advanceTurn(skip=true)`.
+    } else if (card.v === 'R') {
+      state.direction *= -1;
+      showGameMessage('Reversed!');
+      if (state.players.length === 2) state.turn = currentPlayerIndex; // Acts as skip in 2 player
+    }
+  }
+  
+  // Draw stack logic (if next player cannot stack)
+  if (state.drawStack > 0 && gameSettings.stacking) {
+    // Check if next player can stack
+    const canStack = nextPlayer.hand.some(c => canStackCard(c));
+    if (!canStack) {
+      const drawn = drawCards(state.drawStack);
+      nextPlayer.hand.push(...drawn);
+      showGameMessage(nextPlayer.name + ' drew ' + state.drawStack + ' cards!');
+      state.drawStack = 0;
+      state.stackType = null;
+      // Their turn is skipped essentially because they drew? Or do they play?
+      // Rules vary. Usually +2/+4 skips the turn.
+      state.turn = nextIdx; // They are the victim.
+      // advanceTurn will move from them to next.
+    }
+  }
+}
+
+function getNextPlayerIndex() {
+  let next = state.turn + state.direction;
+  if (next >= state.players.length) next = 0;
+  if (next < 0) next = state.players.length - 1;
+  return next;
+}
+
+async function advanceTurn(skipCurrent = false) {
+  // If we are handling skip/reverse logic inside playCard, this just moves normally.
+  // But simpler: 
+  let next = getNextPlayerIndex();
+  
+  // Check if we need to skip (from Skip card or +2/+4)
+  // Actually, let's just compute next.
+  state.turn = next;
+  
+  // Sync
+  if (multiplayerState.gameRef) {
+    // Partial update for turn change
+    const updates = { turn: state.turn, direction: state.direction };
+    state.players.forEach(p => updates['playerHands/' + p.id] = p.hand); // Sync hands just in case
+    await multiplayerState.gameRef.update(updates);
+  }
+  
+  updateUI();
+  renderHand();
+  
+  const currentPlayer = state.players[state.turn];
+  if (currentPlayer && (currentPlayer.isBot || !currentPlayer.isConnected) && multiplayerState.isHost) {
+    setTimeout(botTurn, 1000);
+  } else if (state.turn === multiplayerState.playerIndex) {
+    startTimer();
+    vibrate(100);
+  } else {
+    stopTimer();
+  }
+}
+
+// ==================== DRAW CARD ====================
+function drawCards(count) {
+  let drawn = [];
+  for (let i = 0; i < count; i++) {
+    if (state.deck.length === 0) {
+      if (state.discard.length <= 1) break;
+      const top = state.discard.pop();
+      state.deck = shuffle(state.discard);
+      state.discard = [top];
+    }
+    if (state.deck.length > 0) drawn.push(state.deck.pop());
+  }
+  return drawn;
+}
+
+async function handleDrawPile() {
+  if (state.turn !== multiplayerState.playerIndex || !state.active) return;
+  
+  stopTimer();
+  const player = state.players[multiplayerState.playerIndex];
+  
+  if (state.drawStack > 0 && gameSettings.stacking) {
+    // Must stack or draw
+    const canStack = player.hand.some(c => canStackCard(c));
+    if (canStack) {
+      showGameMessage("You have a card to stack!");
+      startTimer();
+      return;
+    }
+    // Draw stack
+    const drawn = drawCards(state.drawStack);
+    player.hand.push(...drawn);
+    showGameMessage('You drew ' + state.drawStack + ' cards!');
+    vibrate([50, 30, 50]);
+    state.drawStack = 0;
+    state.stackType = null;
+    renderHand();
+    updateUI();
+    await advanceTurn();
+    return;
+  }
+  
+  // Normal Draw
+  const card = drawCards(1)[0];
+  if (!card) return;
+  
+  player.hand.push(card);
+  renderHand();
+  updateUI();
+  
+  const isPlayable = checkValidPlay(card);
+  
+  if (isPlayable) {
+    showDrawnCardPopup(card, true);
+  } else {
+    showGameMessage("Cannot play this card");
+    await sleep(500);
+    await advanceTurn();
+  }
+}
+
+function showDrawnCardPopup(card, canPlay) {
+  const popup = document.getElementById('drawn-card-popup');
+  const display = document.getElementById('drawn-card-display');
+  const playBtn = document.getElementById('play-btn');
+  
+  if (display) {
+    display.innerHTML = '';
+    display.appendChild(renderCard(card));
+  }
+  if (playBtn) playBtn.style.display = canPlay ? 'block' : 'none';
+  if (popup) popup.classList.add('active');
+  
+  state.drawnCard = card;
+}
+
+function hideDrawnCardPopup() {
+  const popup = document.getElementById('drawn-card-popup');
+  if (popup) popup.classList.remove('active');
+}
+
+async function handleKeepCard() {
+  hideDrawnCardPopup();
+  await advanceTurn();
+}
+
+async function handlePlayDrawnCard() {
+  if (!state.drawnCard) return;
+  const player = state.players[multiplayerState.playerIndex];
+  if (!player) return;
+  
+  const cardIndex = player.hand.length - 1; // Assuming it was added to end
+  hideDrawnCardPopup();
+  await playCard(multiplayerState.playerIndex, cardIndex);
+}
+
+// ==================== BOT AI ====================
+async function botTurn() {
+  if (state.isOver || !state.active) return;
+  const player = state.players[state.turn];
+  if (!player || !player.isBot) return;
+  
+  // Simple AI
+  let validMoves = [];
+  player.hand.forEach((card, index) => {
+    if (state.drawStack > 0) {
+      if (canStackCard(card)) validMoves.push({ card, index });
+    } else {
+      if (checkValidPlay(card)) validMoves.push({ card, index });
+    }
+  });
+  
+  await sleep(1000);
+  
+  if (validMoves.length > 0) {
+    const move = validMoves[Math.floor(Math.random() * validMoves.length)]; // Random valid move
+    await playCard(state.turn, move.index);
+  } else {
+    // Draw
+    if (state.drawStack > 0) {
+      const drawn = drawCards(state.drawStack);
+      player.hand.push(...drawn);
+      showGameMessage(player.name + ' drew ' + state.drawStack + ' cards!');
+      state.drawStack = 0; state.stackType = null;
+      await advanceTurn();
+    } else {
+      const card = drawCards(1)[0];
+      if (card) {
+        player.hand.push(card);
+        showGameMessage(player.name + ' drew a card');
+        playSound('draw');
+        await sleep(500);
+        if (checkValidPlay(card)) await playCard(state.turn, player.hand.length - 1);
+        else await advanceTurn();
+      } else await advanceTurn();
+    }
+  }
+}
+
+// ==================== UI UPDATES ====================
+function updateUI() {
+  // Discard Pile
+  const pile = document.getElementById('discard-pile');
+  if (pile) {
+    const top = state.discard[state.discard.length - 1];
+    if (top) {
+      pile.innerHTML = '';
+      const el = renderCard(top);
+      el.style.transform = `rotate(${state.discardRotation}deg)`;
+      pile.appendChild(el);
+    }
+  }
+  
+  // Color Indicator
+  const indicator = document.getElementById('color-indicator');
+  if (indicator) indicator.className = 'color-indicator ' + state.activeColor;
+  
+  // Deck Count
+  const deckCount = document.getElementById('deck-count');
+  if (deckCount) deckCount.textContent = state.deck.length;
+  
+  // UNO Button
+  const unoBtn = document.getElementById('uno-btn');
+  const p = state.players[multiplayerState.playerIndex];
+  if (unoBtn && p) {
+    const show = state.turn === multiplayerState.playerIndex && p.hand.length === 2 && state.active;
+    unoBtn.classList.toggle('active', show);
+  }
 }
 
 function updatePlayerZones() {
-    // Update UI for all players
-    state.players.forEach((player, idx) => {
-        const zone = document.querySelector(`.player-zone.player-${getPositionClass(idx, state.players.length)}`);
-        if (!zone) return;
-        
-        const nameEl = zone.querySelector('.player-name');
-        const countEl = zone.querySelector('.card-count');
-        
-        if (nameEl) nameEl.textContent = player.name;
-        if (countEl) countEl.textContent = player.hand.length + ' cards';
-        
-        // Highlight current turn
-        const info = zone.querySelector('.player-info');
-        if(info) {
-            info.classList.toggle('active', state.turn === idx);
-        }
-    });
+  state.players.forEach((player, idx) => {
+    const zone = document.querySelector('.player-zone.player-' + getPositionClass(idx, state.players.length));
+    if (!zone) return;
+    
+    const nameEl = zone.querySelector('.player-name');
+    const countEl = zone.querySelector('.card-count');
+    const infoEl = zone.querySelector('.player-info');
+    
+    if (nameEl) nameEl.textContent = player.name;
+    if (countEl) countEl.textContent = player.hand.length + ' cards';
+    
+    if (infoEl) {
+      infoEl.classList.remove('active', 'warning');
+      if (state.turn === idx) {
+        infoEl.classList.add('active');
+        if (state.timer <= 3) infoEl.classList.add('warning');
+      }
+    }
+    
+    // Bot Cards
+    if (idx !== multiplayerState.playerIndex) {
+      const containerClass = (idx === 1 || idx === 3) ? '.bot-cards-vertical' : '.bot-cards-horizontal';
+      const cardsContainer = zone.querySelector(containerClass);
+      if (cardsContainer) {
+        cardsContainer.innerHTML = '';
+        const count = Math.min(player.hand.length, 7);
+        for (let i = 0; i < count; i++) cardsContainer.appendChild(renderCard(null, true));
+      }
+    }
+  });
 }
 
-function sortHand(type) {
-    // Client side sorting logic
-    console.log("Sorting by: ", type);
+// ==================== TIMERS ====================
+function startTimer() {
+  if (!gameSettings.timer) return;
+  stopTimer();
+  state.timer = TURN_TIME;
+  updatePlayerZones();
+  
+  state.timerInterval = setInterval(() => {
+    state.timer--;
+    updatePlayerZones();
+    if (state.timer <= 3 && state.timer > 0) playSound('tick');
+    if (state.timer <= 0) {
+      stopTimer();
+      handleTimeout();
+    }
+  }, 1000);
 }
 
-function toggleEmotePanel(idx) {
-    const panel = document.getElementById('emote-panel');
-    if(panel) panel.classList.toggle('active');
+function stopTimer() {
+  if (state.timerInterval) clearInterval(state.timerInterval);
 }
 
-function sendEmote(emoteKey) {
-    console.log("Sending emote: ", emoteKey);
-    const panel = document.getElementById('emote-panel');
-    if(panel) panel.classList.remove('active');
+async function handleTimeout() {
+  if (state.turn !== multiplayerState.playerIndex) return;
+  showGameMessage('Time Out!');
+  // Auto draw 1
+  const card = drawCards(1)[0];
+  if (card) state.players[multiplayerState.playerIndex].hand.push(card);
+  renderHand();
+  await advanceTurn();
 }
 
-// ==================== INIT ====================
+function startAfkTimer() {
+  multiplayerState.afkTimer = setInterval(() => {
+    if (Date.now() - multiplayerState.lastActivity > 30000 && state.turn === multiplayerState.playerIndex) {
+      showToast("You are AFK!");
+      // Bot takes over? 
+    }
+  }, 5000);
+}
+
+function updateActivity() { multiplayerState.lastActivity = Date.now(); }
+
+// ==================== EFFECTS ====================
+function showColorPicker3D() {
+  const picker = document.getElementById('color-picker-3d');
+  if (picker) picker.classList.add('active');
+}
+
+function hideColorPicker3D() {
+  const picker = document.getElementById('color-picker-3d');
+  if (picker) picker.classList.remove('active');
+}
+
+function createWildExplosion() {
+  let container = document.getElementById('wild-explosion');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'wild-explosion';
+    container.className = 'wild-explosion';
+    document.body.appendChild(container);
+  }
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B'];
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'wild-particle';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.setProperty('--tx', (Math.random() * 200 - 100) + 'px');
+    p.style.setProperty('--ty', (Math.random() * 200 - 100) + 'px');
+    container.appendChild(p);
+    setTimeout(() => p.remove(), 800);
+  }
+}
+
+function createConfetti() {
+  let container = document.getElementById('confetti-container');
+  if (!container) return; // Should exist in HTML
+  container.innerHTML = '';
+  const colors = ['#FF3B5C', '#4DABF7', '#51CF66', '#FFD43B'];
+  for (let i = 0; i < 80; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDelay = Math.random() * 1 + 's';
+    container.appendChild(c);
+  }
+}
+
+// ==================== END GAME ====================
+async function endMultiplayerGame(winnerIndex) {
+  state.isOver = true; state.active = false;
+  stopTimer(); clearInterval(multiplayerState.afkTimer);
+  
+  const isWin = winnerIndex === multiplayerState.playerIndex;
+  if (multiplayerState.lobbyRef) await multiplayerState.lobbyRef.update({ status: 'finished' });
+  
+  if (isWin) { createConfetti(); playSound('win'); }
+  else playSound('lose');
+  
+  const modal = document.getElementById('game-over');
+  const icon = document.getElementById('result-icon');
+  const text = document.getElementById('winner-text');
+  const xp = document.getElementById('xp-value');
+  
+  if (icon) icon.innerHTML = isWin 
+    ? '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="white"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" fill="white"/></svg>';
+  if (icon) icon.className = 'result-icon ' + (isWin ? 'win' : 'lose');
+  if (text) text.textContent = isWin ? 'YOU WIN!' : 'YOU LOSE';
+  if (xp) xp.textContent = '+' + (isWin ? 250 : 50);
+  if (modal) modal.classList.add('active');
+}
+
+function rematch() {
+  document.getElementById('game-over')?.classList.remove('active');
+  if (multiplayerState.isHost) multiplayerState.lobbyRef?.update({ status: 'waiting' });
+  showScreen('lobby-room');
+  updateLobbyUI();
+}
+
+function backToLobby() {
+  document.getElementById('game-over')?.classList.remove('active');
+  showScreen('lobby-room');
+}
+
+function backToMenu() {
+  document.getElementById('game-over')?.classList.remove('active');
+  cleanupLobby();
+  showScreen('menu-screen');
+}
+
+// ==================== EVENT LISTENERS ====================
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
   runLoadingScreen();
   
-  // Setup existing UI listeners if needed
-  const codeInput = document.getElementById('room-code-input');
-  if (codeInput) {
-    codeInput.addEventListener('input', (e) => {
-      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-      if (value.length > 4 && !value.includes('-')) {
-        value = value.slice(0, 3) + '-' + value.slice(3);
-      }
-      e.target.value = value;
+  // Draw Pile
+  document.getElementById('draw-pile')?.addEventListener('click', handleDrawPile);
+  
+  // UNO Button
+  document.getElementById('uno-btn')?.addEventListener('click', () => {
+    if (state.turn === multiplayerState.playerIndex && state.players[multiplayerState.playerIndex]?.hand.length === 2) {
+      state.saidUno.add(multiplayerState.playerIndex);
+      playSound('uno');
+      showGameMessage('UNO!');
+    }
+  });
+  
+  // Color Picker
+  document.querySelectorAll('.color-box-3d').forEach(box => {
+    box.addEventListener('click', () => selectWildColor(box.dataset.color));
+  });
+  
+  // Sort Buttons
+  document.getElementById('sort-color')?.addEventListener('click', () => {
+    state.sortMode = 'color';
+    sortHand();
+  });
+  document.getElementById('sort-value')?.addEventListener('click', () => {
+    state.sortMode = 'value';
+    sortHand();
+  });
+  
+  // Drawn Card Popup Buttons
+  document.getElementById('keep-btn')?.addEventListener('click', handleKeepCard);
+  document.getElementById('play-btn')?.addEventListener('click', handlePlayDrawnCard);
+  
+  // Chat
+  document.getElementById('chat-input')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+  });
+  
+  // Theme Selection
+  document.querySelectorAll('.theme-card').forEach(card => {
+    card.addEventListener('click', function() {
+      document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
     });
-  }
-
-  // Handle Drag and Drop for cards if needed
-  const discardPile = document.getElementById('discard-pile');
-  if(discardPile) {
-      discardPile.addEventListener('dragover', e => e.preventDefault());
-      discardPile.addEventListener('drop', e => {
-          e.preventDefault();
-          console.log("Card dropped");
-      });
-  }
+  });
 });
+
+function sortHand() {
+  const player = state.players[multiplayerState.playerIndex];
+  if (!player) return;
+  
+  if (state.sortMode === 'color') {
+    player.hand.sort((a, b) => {
+      if (a.c === b.c) return a.v.localeCompare(b.v);
+      return a.c.localeCompare(b.c);
+    });
+  } else {
+    player.hand.sort((a, b) => a.v.localeCompare(b.v));
+  }
+  renderHand();
+}
+
+// Global function exposure for HTML onclick
+window.showMultiplayerOptions = showMultiplayerOptions;
+window.closeMultiplayerOptions = closeMultiplayerOptions;
+window.startQuickMatch = startQuickMatch;
+window.showSettings = showSettings;
+window.closeSettings = closeSettings;
+window.toggleSetting = toggleSetting;
+window.showLeaderboard = showLeaderboard;
+window.closeLeaderboard = closeLeaderboard;
+window.showCreateLobby = showCreateLobby;
+window.closeCreateLobby = closeCreateLobby;
+window.togglePrivate = togglePrivate;
+window.createLobby = createLobby;
+window.showJoinLobby = showJoinLobby;
+window.closeJoinLobby = closeJoinLobby;
+window.pasteCode = pasteCode;
+window.joinLobbyByCode = joinLobbyByCode;
+window.copyRoomCode = copyRoomCode;
+window.leaveLobby = leaveLobby;
+window.startMultiplayerGame = startMultiplayerGame;
+window.toggleReady = toggleReady;
+window.changeTeam = changeTeam;
+window.kickPlayer = kickPlayer;
+window.sendChatMessage = sendChatMessage;
+window.rematch = rematch;
+window.backToLobby = backToLobby;
+window.backToMenu = backToMenu;
+window.cancelQuickMatch = cancelQuickMatch;
+window.toggleEmotePanel = (idx) => showToast("Emotes coming soon");
+window.sendEmote = (key) => showToast("Emotes coming soon");
+window.sortHand = sortHand;
+window.joinLobbyById = joinLobbyById;
+window.refreshPublicLobbies = refreshPublicLobbies;
