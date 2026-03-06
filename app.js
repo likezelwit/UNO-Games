@@ -13,6 +13,7 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+const auth = firebase.auth();
 
 // ==================== CONSTANTS ====================
 const COLORS = ['red', 'blue', 'green', 'yellow'];
@@ -45,7 +46,8 @@ const playerStats = {
   level: 12,
   xp: 2450,
   xpNeeded: 3000,
-  coins: 1250
+  coins: 1250,
+  uid: null
 };
 
 // Game State
@@ -96,11 +98,66 @@ let multiplayerState = {
   playerPositions: {},
   isSearching: false,
   searchRef: null,
-  callbacks: {}
+  callbacks: {},
+  currentUser: null
 };
 
 // Audio Context
 let audioCtx = null;
+
+// ==================== AUTHENTICATION ====================
+function initAuth() {
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      // User is signed in.
+      multiplayerState.currentUser = user;
+      multiplayerState.playerId = user.uid;
+      
+      if (user.isAnonymous) {
+        multiplayerState.playerName = 'Guest_' + Math.random().toString(36).substr(2, 4);
+        playerStats.name = multiplayerState.playerName;
+      } else {
+        multiplayerState.playerName = user.displayName || 'Player';
+        playerStats.name = multiplayerState.playerName;
+        // Update avatar if needed
+      }
+      
+      updatePlayerUI();
+      showScreen('loading-screen');
+      runLoadingScreen();
+    } else {
+      // User is signed out. Show auth screen.
+      showScreen('auth-screen');
+    }
+  });
+}
+
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch((error) => {
+    console.error("Google Sign-In Error:", error);
+    showToast("Google Sign-In failed. Try again or play as Guest.");
+  });
+}
+
+function signInAnonymously() {
+  auth.signInAnonymously().catch((error) => {
+    console.error("Anonymous Sign-In Error:", error);
+    showToast("Failed to start guest session.");
+  });
+}
+
+function signOutUser() {
+  if (multiplayerState.lobbyId) {
+    leaveLobby(); // Clean up lobby first
+  }
+  auth.signOut();
+}
+
+function updatePlayerUI() {
+  const nameEl = document.getElementById('player-name');
+  if (nameEl) nameEl.textContent = playerStats.name;
+}
 
 // ==================== INITIALIZATION ====================
 function initAudio() {
@@ -205,7 +262,14 @@ function getPositionClass(idx, totalPlayers) {
     const positions = ['bottom', 'right', 'left'];
     return positions[idx];
   }
-  return ['bottom', 'left', 'top', 'right'][idx];
+  if (totalPlayers === 4) {
+    return ['bottom', 'left', 'top', 'right'][idx];
+  }
+  // 5 Players arrangement
+  if (totalPlayers === 5) {
+    return ['bottom', 'left', 'top-left', 'top-right', 'right'][idx];
+  }
+  return ['bottom', 'left', 'top', 'right'][idx % 4];
 }
 
 function showScreen(screenId) {
@@ -513,7 +577,8 @@ async function createLobby() {
   multiplayerState.maxPlayers = parseInt(activeCount?.dataset.count) || 4;
   multiplayerState.isPrivate = privateToggle?.classList.contains('active') || false;
   multiplayerState.isHost = true;
-  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  // Use Auth UID if available, otherwise fallback
+  if (!multiplayerState.playerId) multiplayerState.playerId = 'player_' + Date.now();
   
   const roomCode = generateRoomCode();
   multiplayerState.lobbyId = roomCode;
@@ -642,7 +707,7 @@ async function joinLobbyByCode() {
 }
 
 async function joinLobbyById(lobbyId) {
-  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  if (!multiplayerState.playerId) multiplayerState.playerId = 'player_' + Date.now();
   multiplayerState.lobbyId = lobbyId;
   multiplayerState.isHost = false;
   
@@ -715,7 +780,7 @@ function startQuickMatch() {
 }
 
 async function performQuickMatch() {
-  multiplayerState.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  if (!multiplayerState.playerId) multiplayerState.playerId = 'player_' + Date.now();
   multiplayerState.isQuickMatch = true;
   
   try {
@@ -770,7 +835,7 @@ async function createQuickMatchLobby() {
     hostId: multiplayerState.playerId,
     hostName: multiplayerState.playerName,
     gameMode: 'classic',
-    maxPlayers: 4,
+    maxPlayers: 4, // Default for quick match
     isPrivate: false,
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     status: 'waiting',
@@ -835,7 +900,7 @@ function pasteCode() {
 }
 
 function changeTeam() {
-  // Placeholder for team mode logic if implemented
+  // Placeholder for team mode logic
   showToast("Team changing not implemented in this mode.");
 }
 
@@ -915,11 +980,15 @@ function setupLobbyListeners() {
     if (status === 'playing') {
       startGameFromLobby();
     }
+    if (status === 'finished') {
+        // Handle game end logic if still in lobby view
+    }
   });
   
+  // Detect if lobby is deleted (Host left)
   multiplayerState.lobbyRef.on('value', (snapshot) => {
-    if (!snapshot.exists()) {
-      showToast('Lobby has been closed');
+    if (!snapshot.exists() && document.getElementById('lobby-room').classList.contains('active')) {
+      showToast('Lobby has been closed by the host');
       leaveLobby();
     }
   });
@@ -976,20 +1045,26 @@ async function leaveLobby() {
 
 function cleanupLobby() {
   if (multiplayerState.lobbyRef && multiplayerState.playerId) {
+    // Remove player
     multiplayerState.lobbyRef.child('players/' + multiplayerState.playerId).remove();
     
+    // Remove from order
     multiplayerState.lobbyRef.child('playerOrder').once('value', (snapshot) => {
       const order = snapshot.val() || [];
       const newOrder = order.filter(id => id !== multiplayerState.playerId);
       
       if (newOrder.length === 0) {
+        // If empty, delete lobby
         multiplayerState.lobbyRef.remove();
       } else {
         multiplayerState.lobbyRef.child('playerOrder').set(newOrder);
+        
+        // If host left, close the room (requirement)
         if (multiplayerState.isHost) {
-          const newHostId = newOrder[0];
-          multiplayerState.lobbyRef.child('hostId').set(newHostId);
-          multiplayerState.lobbyRef.child('players/' + newHostId + '/isHost').set(true);
+             multiplayerState.lobbyRef.remove(); 
+             // Alternatively, transfer host, but requirement says close if host gone.
+        } else {
+            // If not host, check if remaining players < 2, might need logic to close game
         }
       }
     });
@@ -1091,6 +1166,14 @@ function handlePlayerDisconnect(playerId, playerIndex) {
   const player = state.players[playerIndex];
   if (!player) return;
   
+  // If only 1 player left (me), I win.
+  // Check how many are still connected
+  const connectedPlayers = state.players.filter(p => p.isConnected !== false);
+  if (connectedPlayers.length <= 1 && connectedPlayers[0].id === multiplayerState.playerId) {
+      endMultiplayerGame(multiplayerState.playerIndex); // I win
+      return;
+  }
+
   player.isBot = true;
   player.isConnected = false;
   player.botReason = 'disconnected';
@@ -1164,7 +1247,7 @@ async function startMultiplayerGame() {
   const deck = createDeck();
   let startCard = deck.pop();
   
-  // Ensure first card is not a wild or action card for simplicity
+  // Ensure first card is not a wild or action card
   while (startCard.c === 'black' || ['S', 'R', '+2'].includes(startCard.v)) {
     deck.unshift(startCard);
     shuffle(deck);
@@ -1264,6 +1347,9 @@ function syncGameState(gameData) {
   state.stackType = gameData.stackType || null;
   state.active = true;
   state.isOver = false;
+  
+  // Animate deal only once or based on flag
+  // renderHand will handle the view
   
   renderHand();
   updateUI();
@@ -1690,8 +1776,11 @@ function updateTurnIndicator() {
 
 function updatePlayerZones() {
   state.players.forEach((player, idx) => {
-    const zone = document.querySelector('.player-zone.player-' + getPositionClass(idx, state.players.length));
-    if (!zone) return;
+    // Use the new positioning logic
+    const posClass = getPositionClass(idx, state.players.length);
+    const zone = document.querySelector('.player-zone.player-' + posClass);
+    
+    if (!zone) return; // Skip if zone doesn't exist in HTML (rare case for dynamic)
     
     const info = zone.querySelector('.player-info');
     const nameEl = zone.querySelector('.player-name');
@@ -2113,6 +2202,7 @@ async function endMultiplayerGame(winnerIndex) {
   const isWin = winnerIndex === multiplayerState.playerIndex;
   
   if (multiplayerState.lobbyRef) {
+    // Only update status, keep lobby for results
     await multiplayerState.lobbyRef.update({ status: 'finished' });
   }
   
@@ -2269,7 +2359,9 @@ function closeLeaderboard() {
 // ==================== EVENT LISTENERS ====================
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
-  runLoadingScreen();
+  
+  // Initialize Auth first
+  initAuth();
   
   // Draw pile
   document.getElementById('draw-pile')?.addEventListener('click', handleDrawPile);
