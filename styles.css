@@ -221,6 +221,11 @@ body {
   80% { transform: translateX(6px) rotate(2deg); }
 }
 
+.uno-card.card-back {
+  background: linear-gradient(145deg, #2d2d44, #1d1d2e);
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
 /* ==================== SCREEN MANAGEMENT ==================== */
 .screen { display: none; }
 .screen.active { display: flex; }
