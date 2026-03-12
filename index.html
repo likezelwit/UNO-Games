@@ -1,63 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#1a1a2e">
-  <meta name="mobile-web-app-capable" content="yes">
-  
-  <!-- SEO & PWA Meta Tags -->
-  <meta name="description" content="Play UNO Multiplayer Card Game online with friends! Classic, Team, and Wild modes available.">
-  <meta name="keywords" content="UNO, card game, multiplayer, online game, family game">
-  <meta name="author" content="UNO Game">
-  <meta name="robots" content="index, follow">
-  
-  <!-- Open Graph / Social Media -->
-  <meta property="og:title" content="UNO - Multiplayer Card Game">
-  <meta property="og:description" content="Play UNO online with friends! Classic, Team, and Wild modes.">
-  <meta property="og:type" content="website">
-  <meta property="og:image" content="icons/og-image.png">
-  
-  <!-- Security -->
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  
-  <title>UNO - Multiplayer Card Game</title>
-  
-  <!-- Favicon -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🃏%3C/text%3E%3C/svg%3E">
-  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-  
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
-  
-  <!-- Preconnect untuk performa -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://www.gstatic.com">
-  
-  <!-- Fonts dengan display=swap untuk FOIT prevention -->
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  
-  <!-- ======================================== -->
-  <!-- CSS PARTS (Total 3 Files)                -->
-  <!-- ======================================== -->
-  
-  <!-- 1. Main Styles: Variables, Reset, Base Layout -->
-  <link rel="stylesheet" href="css/main.css">
-  
-  <!-- 2. Lobby Styles: Menu, Modals, Settings, Room List -->
-  <link rel="stylesheet" href="css/lobby.css">
-  
-  <!-- 3. Game Styles: Board, Cards, Animations, Player Deck -->
-  <link rel="stylesheet" href="css/game.css">
-
-  <!-- Preload critical assets (Update paths if needed) -->
-  <link rel="preload" href="css/main.css" as="style">
-  <link rel="preload" href="js/app.js" as="script">
-</head>
 <body>
   <!-- Skip to content untuk aksesibilitas -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -325,10 +265,162 @@
         </div>
       </div>
     </div>
-    
-    <!-- Game App -->
+
+    <!-- ================================================== -->
+    <!-- GAME APP (INTEGRATED HTML)                         -->
+    <!-- ================================================== -->
     <div id="game-app" class="screen" role="main" aria-label="Game Board" style="display: none;">
-      <!-- Game content here... -->
+      
+      <!-- Top Bar -->
+      <div class="top-bar">
+        <div class="game-info-left">
+          <div class="room-code-mini glass-panel" id="room-code-mini">UNO-XXXX</div>
+        </div>
+        <div class="turn-timer glass-panel" id="game-timer-display" style="display: none;">
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+          <span id="game-timer-value">00:00</span>
+        </div>
+      </div>
+
+      <!-- Turn Indicator -->
+      <div id="turn-indicator" class="turn-indicator glass-panel" style="display: none;">
+        <div class="dot"></div>
+        <span id="turn-text">Your Turn</span>
+      </div>
+
+      <!-- Game Table -->
+      <div class="game-table">
+        <div class="table-surface" id="table-surface"></div>
+        
+        <!-- Direction Indicator -->
+        <div class="direction-indicator" id="direction-indicator">
+          <svg viewBox="0 0 100 100">
+            <path class="direction-arrow" d="M50 10 L90 50 L50 90 L50 60 L10 60 L10 40 L50 40 Z" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+          </svg>
+        </div>
+
+        <!-- Center Area (Discard Pile) -->
+        <div class="center-area">
+          <div id="discard-pile" class="discard-pile"></div>
+          <div id="color-indicator" class="color-indicator red"></div>
+        </div>
+
+        <!-- Player Zones (Static) -->
+        <!-- Bottom (You) -->
+        <div class="player-zone player-bottom">
+          <div class="player-info glass-panel">
+            <div class="player-avatar color-glow">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+            </div>
+            <div class="player-details">
+              <div class="player-name">You</div>
+              <div class="card-count">7 cards</div>
+            </div>
+            <button class="emote-btn" onclick="toggleEmotePanel()" type="button">
+              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Top -->
+        <div class="player-zone player-top">
+          <div class="player-info glass-panel">
+            <div class="player-avatar">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+            </div>
+            <div class="player-details">
+              <div class="player-name">Bot 1</div>
+              <div class="card-count">7 cards</div>
+            </div>
+          </div>
+          <div class="bot-cards-horizontal"></div>
+        </div>
+
+        <!-- Left -->
+        <div class="player-zone player-left">
+          <div class="player-info glass-panel">
+            <div class="player-avatar">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+            </div>
+            <div class="player-details">
+              <div class="player-name">Bot 2</div>
+              <div class="card-count">7 cards</div>
+            </div>
+          </div>
+          <div class="bot-cards-vertical"></div>
+        </div>
+
+        <!-- Right -->
+        <div class="player-zone player-right">
+          <div class="player-info glass-panel">
+            <div class="player-avatar">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+            </div>
+            <div class="player-details">
+              <div class="player-name">Bot 3</div>
+              <div class="card-count">7 cards</div>
+            </div>
+          </div>
+          <div class="bot-cards-vertical"></div>
+        </div>
+
+      </div>
+
+      <!-- Draw Pile -->
+      <div class="draw-pile-container">
+        <div class="draw-label">DRAW</div>
+        <div class="deck-pile" id="draw-pile">
+          <!-- Card Backs are rendered in CSS/JS -->
+        </div>
+        <div class="deck-count" id="deck-count">0</div>
+      </div>
+
+      <!-- UNO Button -->
+      <div class="uno-btn-wrap">
+        <button class="big-uno-btn" id="uno-btn" type="button">UNO!</button>
+      </div>
+
+      <!-- Hand Area -->
+      <div class="hand-area">
+        <div class="hand-header">
+          <button class="sort-btn" onclick="sortHand('color')" type="button">Sort Color</button>
+          <button class="sort-btn" onclick="sortHand('value')" type="button">Sort Value</button>
+        </div>
+        <div id="player-hand" class="hand-container">
+          <!-- Cards will be rendered here by JS -->
+        </div>
+      </div>
+
+      <!-- Color Picker -->
+      <div id="color-picker-3d" class="color-picker-3d">
+        <div class="color-box-3d red" data-color="red" onclick="selectWildColor('red')"></div>
+        <div class="color-box-3d blue" data-color="blue" onclick="selectWildColor('blue')"></div>
+        <div class="color-box-3d green" data-color="green" onclick="selectWildColor('green')"></div>
+        <div class="color-box-3d yellow" data-color="yellow" onclick="selectWildColor('yellow')"></div>
+      </div>
+
+      <!-- Emote Panel -->
+      <div id="emote-panel" class="emote-panel glass-panel">
+        <div class="emote-item" onclick="sendEmote('angry')" role="button" tabindex="0">😠</div>
+        <div class="emote-item" onclick="sendEmote('laugh')" role="button" tabindex="0">😂</div>
+        <div class="emote-item" onclick="sendEmote('cry')" role="button" tabindex="0">😢</div>
+        <div class="emote-item" onclick="sendEmote('fire')" role="button" tabindex="0">🔥</div>
+        <div class="emote-item" onclick="sendEmote('cool')" role="button" tabindex="0">😎</div>
+        <div class="emote-item" onclick="sendEmote('think')" role="button" tabindex="0">🤔</div>
+      </div>
+
+    </div> <!-- End Game App -->
+
+    <!-- Drawn Card Popup (Global) -->
+    <div id="drawn-card-popup" class="drawn-card-popup" style="display: none;">
+      <div class="drawn-card-content glass-panel">
+        <h3 class="drawn-card-title">Drew a Card</h3>
+        <div id="drawn-card-display" class="drawn-card-display"></div>
+        <div class="drawn-card-buttons">
+          <button class="drawn-btn keep-btn" id="keep-btn" type="button">Keep</button>
+          <button class="drawn-btn play-btn" id="play-btn" type="button">Play</button>
+        </div>
+      </div>
     </div>
 
     <!-- Settings Modal -->
@@ -437,4 +529,3 @@
   <script src="js/app.js" defer></script>
 
 </body>
-</html>
