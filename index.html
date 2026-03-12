@@ -1,3 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <!-- SEO & PWA Meta Tags -->
+  <meta name="description" content="Play UNO Multiplayer Card Game online with friends! Classic, Team, and Wild modes available.">
+  <meta name="keywords" content="UNO, card game, multiplayer, online game, family game">
+  <meta name="author" content="UNO Game">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:title" content="UNO - Multiplayer Card Game">
+  <meta property="og:description" content="Play UNO online with friends! Classic, Team, and Wild modes.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/og-image.png">
+  
+  <!-- Security -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  
+  <title>UNO - Multiplayer Card Game</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🃏%3C/text%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Preconnect untuk performa -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+  
+  <!-- Fonts dengan display=swap untuk FOIT prevention -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- ======================================== -->
+  <!-- CSS PARTS (Total 3 Files)                -->
+  <!-- ======================================== -->
+  
+  <!-- 1. Main Styles: Variables, Reset, Base Layout -->
+  <link rel="stylesheet" href="css/main.css">
+  
+  <!-- 2. Lobby Styles: Menu, Modals, Settings, Room List -->
+  <link rel="stylesheet" href="css/lobby.css">
+  
+  <!-- 3. Game Styles: Board, Cards, Animations, Player Deck -->
+  <link rel="stylesheet" href="css/game.css">
+
+  <!-- Preload critical assets -->
+  <link rel="preload" href="css/main.css" as="style">
+  <link rel="preload" href="js/app.js" as="script">
+</head>
 <body>
   <!-- Skip to content untuk aksesibilitas -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -30,10 +90,11 @@
   <div class="confetti-container" id="confetti-container" aria-hidden="true"></div>
   
   <!-- Game Message -->
-  <div id="game-message" class="game-message glass-panel" role="status" aria-live="polite" style="display: none;"></div>
+  <div id="game-message" class="game-message glass-panel" role="status" aria-live="polite"></div>
 
   <!-- Landscape Prompt -->
-  <div id="landscape-prompt" class="landscape-prompt" role="dialog" aria-modal="true" aria-labelledby="landscape-title" style="display: none;">
+  <!-- Hapus inline style="display: none;", biarkan CSS yang mengatur -->
+  <div id="landscape-prompt" class="landscape-prompt" role="dialog" aria-modal="true" aria-labelledby="landscape-title">
     <svg class="landscape-icon" viewBox="0 0 24 24" fill="white" aria-hidden="true">
       <path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/>
     </svg>
@@ -163,7 +224,8 @@
     </div>
 
     <!-- Multiplayer Options Modal -->
-    <div id="multiplayer-options-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="multiplayer-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="multiplayer-options-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="multiplayer-title">
       <div class="glass-panel modal-content multiplayer-modal">
         <button class="modal-close" onclick="closeMultiplayerOptions()" type="button" aria-label="Close modal">×</button>
         <h3 id="multiplayer-title" class="modal-title">Multiplayer</h3>
@@ -189,7 +251,8 @@
     </div>
 
     <!-- Create Lobby Modal -->
-    <div id="create-lobby-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-lobby-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="create-lobby-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-lobby-title">
       <div class="glass-panel modal-content create-lobby-modal">
         <button class="modal-close" onclick="closeCreateLobby()" type="button" aria-label="Close modal">×</button>
         <h3 id="create-lobby-title" class="modal-title">Create Lobby</h3>
@@ -231,7 +294,8 @@
     </div>
 
     <!-- Join Lobby Modal -->
-    <div id="join-lobby-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="join-lobby-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="join-lobby-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="join-lobby-title">
       <div class="glass-panel modal-content join-lobby-modal">
         <button class="modal-close" onclick="closeJoinLobby()" type="button" aria-label="Close modal">×</button>
         <h3 id="join-lobby-title" class="modal-title">Join Lobby</h3>
@@ -269,7 +333,8 @@
     <!-- ================================================== -->
     <!-- GAME APP (INTEGRATED HTML)                         -->
     <!-- ================================================== -->
-    <div id="game-app" class="screen" role="main" aria-label="Game Board" style="display: none;">
+    <!-- style="display: none;" dibiarkan karena ini screen utama, dikontrol class .screen.active -->
+    <div id="game-app" class="screen" role="main" aria-label="Game Board">
       
       <!-- Top Bar -->
       <div class="top-bar">
@@ -283,7 +348,7 @@
       </div>
 
       <!-- Turn Indicator -->
-      <div id="turn-indicator" class="turn-indicator glass-panel" style="display: none;">
+      <div id="turn-indicator" class="turn-indicator glass-panel">
         <div class="dot"></div>
         <span id="turn-text">Your Turn</span>
       </div>
@@ -412,7 +477,8 @@
     </div> <!-- End Game App -->
 
     <!-- Drawn Card Popup (Global) -->
-    <div id="drawn-card-popup" class="drawn-card-popup" style="display: none;">
+    <!-- DIHAPUS style="display: none;" agar CSS opacity/visibility bisa bekerja -->
+    <div id="drawn-card-popup" class="drawn-card-popup">
       <div class="drawn-card-content glass-panel">
         <h3 class="drawn-card-title">Drew a Card</h3>
         <div id="drawn-card-display" class="drawn-card-display"></div>
@@ -424,7 +490,8 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="settings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="glass-panel modal-content p-6">
         <button class="modal-close" onclick="closeSettings()" type="button" aria-label="Close settings">×</button>
         <h3 id="settings-title" class="modal-title">Game Settings</h3>
@@ -458,7 +525,8 @@
     </div>
 
     <!-- Leaderboard Modal -->
-    <div id="leaderboard-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="leaderboard-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
       <div class="glass-panel modal-content leaderboard-content">
         <button class="modal-close" onclick="closeLeaderboard()" type="button" aria-label="Close leaderboard">×</button>
         <h3 id="leaderboard-title" class="modal-title">Global Leaderboard</h3>
@@ -476,7 +544,8 @@
     </div>
 
     <!-- Game Over Modal -->
-    <div id="game-over" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="game-over-title" style="display: none;">
+    <!-- DIHAPUS style="display: none;" -->
+    <div id="game-over" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
       <div class="glass-panel modal-content p-6 flex flex-col items-center gap-4 text-center">
         <div class="result-icon" id="result-icon" aria-hidden="true"></div>
         <h2 id="game-over-title" class="text-xl font-extrabold modal-title">GAME OVER</h2>
@@ -529,3 +598,4 @@
   <script src="js/app.js" defer></script>
 
 </body>
+</html>
