@@ -300,7 +300,7 @@ body {
   box-shadow: 0 12px 40px rgba(81, 207, 102, 0.5);
 }
 
-/* ==================== MODAL BASE ==================== */
+/* ==================== MODAL BASE (PERBAIKAN PENTING) ==================== */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -310,14 +310,20 @@ body {
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(15px);
+  
+  /* Awal: Sembunyikan total */
   opacity: 0;
+  visibility: hidden; 
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  
+  /* Transisi halus */
+  transition: opacity 0.3s ease, visibility 0.3s ease;
   padding: 20px;
 }
 
 .modal-overlay.active {
   opacity: 1;
+  visibility: visible;
   pointer-events: all;
 }
 
