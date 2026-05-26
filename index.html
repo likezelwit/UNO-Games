@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0a0a12">
-    <title>UNO - Multiplayer Card Game</title>
+    <title>UNO - Card Game</title>
     <link rel="manifest" href="manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
-    <!-- Loading Screen -->
     <div id="loading-screen" class="screen active">
         <div class="loading-content">
             <h1 class="loading-title">UNO</h1>
@@ -22,42 +21,34 @@
                 <div class="loading-card green"></div>
                 <div class="loading-card yellow"></div>
             </div>
-            <div class="loading-bar">
-                <div class="loading-progress" id="loading-progress"></div>
-            </div>
-            <p class="loading-text" id="loading-text">Loading...</p>
+            <div class="loading-bar"><div class="loading-progress" id="loading-progress"></div></div>
+            <p class="loading-text" id="loading-text">Shuffling deck...</p>
         </div>
     </div>
 
-    <!-- Main Menu -->
     <div id="menu-screen" class="screen">
         <div class="menu-bg"></div>
         <div class="particles" id="particles"></div>
-
         <div class="menu-content">
             <header class="menu-header">
                 <h1 class="game-title">UNO</h1>
-                <p class="game-subtitle">MULTIPLAYER CARD GAME</p>
+                <p class="game-subtitle">CARD GAME</p>
             </header>
-
             <div class="player-profile">
-                <div class="avatar">👤</div>
+                <div class="avatar" id="menu-avatar">P</div>
                 <div class="profile-info">
                     <span class="player-name" id="menu-player-name">Player</span>
-                    <span class="player-level">Level <span id="player-level">1</span></span>
+                    <span class="player-level">Lvl <span id="player-level">1</span></span>
                 </div>
-                <div class="xp-bar">
-                    <div class="xp-fill" id="xp-fill" style="width: 0%"></div>
-                </div>
+                <div class="xp-bar"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
             </div>
-
             <div class="mode-selection">
-                <p class="section-label">SELECT MODE</p>
+                <p class="section-label">GAME MODE</p>
                 <div class="mode-cards">
                     <button class="mode-card active" data-mode="classic" onclick="selectMode('classic')">
                         <span class="mode-icon">🎮</span>
                         <span class="mode-name">Classic</span>
-                        <span class="mode-desc">1v1v1v1</span>
+                        <span class="mode-desc">FFA</span>
                     </button>
                     <button class="mode-card" data-mode="team" onclick="selectMode('team')">
                         <span class="mode-icon">👥</span>
@@ -65,110 +56,107 @@
                         <span class="mode-desc">2v2</span>
                     </button>
                     <button class="mode-card" data-mode="wild" onclick="selectMode('wild')">
-                        <span class="mode-icon">🌟</span>
+                        <span class="mode-icon">🃏</span>
                         <span class="mode-name">Wild</span>
-                        <span class="mode-desc">Extra Wilds</span>
+                        <span class="mode-desc">8 Wilds</span>
                     </button>
                 </div>
             </div>
-
             <div class="menu-actions">
-                <button class="btn btn-primary" onclick="startQuickMatch()">
-                    <span>⚡</span> Quick Match
-                </button>
-                <button class="btn btn-secondary" onclick="showCreateLobby()">
-                    <span>🏠</span> Create Room
-                </button>
-                <button class="btn btn-secondary" onclick="showJoinLobby()">
-                    <span>🔑</span> Join Room
-                </button>
+                <button class="btn btn-primary" onclick="startQuickMatch()"><span>⚡</span> Quick Play</button>
+                <button class="btn btn-secondary" onclick="showCreateLobby()"><span>🏠</span> Create Room</button>
+                <button class="btn btn-secondary" onclick="showJoinLobby()"><span>🔑</span> Join Room</button>
             </div>
-
             <div class="menu-footer">
                 <button class="btn btn-ghost" onclick="showSettings()">⚙️ Settings</button>
-                <button class="btn btn-ghost" onclick="showLeaderboard()">🏆 Leaderboard</button>
+                <button class="btn btn-ghost" onclick="showLeaderboard()">🏆 Stats</button>
             </div>
         </div>
     </div>
 
-    <!-- Game Screen -->
+    <div id="lobby-screen" class="screen">
+        <div class="lobby-bg"></div>
+        <div class="lobby-content">
+            <button class="btn-leave" onclick="leaveLobby()">✕</button>
+            <h2 class="lobby-title">LOBBY</h2>
+            <div class="lobby-code-box">
+                <span class="lobby-label">ROOM CODE</span>
+                <span class="lobby-code" id="lobby-code-display">UNO-XXXXX</span>
+                <button class="btn-copy" onclick="copyCode()">Copy</button>
+            </div>
+            <div class="lobby-players" id="lobby-players-list"></div>
+            <p class="lobby-hint" id="lobby-hint">Waiting for players...</p>
+            <button class="btn btn-primary" id="lobby-start-btn" onclick="startFromLobby()" style="display:none">Start Game</button>
+        </div>
+    </div>
+
     <div id="game-screen" class="screen">
         <div class="game-table">
-            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="game-info">
-                    <span class="room-code" id="game-room-code"></span>
-                    <span class="turn-timer" id="turn-timer">⏱️ 10s</span>
+                    <span class="room-code" id="game-room-code">LOCAL</span>
+                    <span class="turn-timer" id="turn-timer">15s</span>
                 </div>
                 <button class="btn-leave" onclick="leaveGame()">✕</button>
             </div>
-
-            <!-- Opponents -->
             <div class="opponents-area">
-                <div class="opponent" id="opponent-top">
-                    <div class="opponent-avatar">🤖</div>
-                    <div class="opponent-info">
-                        <span class="opponent-name">Bot 1</span>
-                        <span class="card-count">7 cards</span>
+                <div class="opponent" id="opp-0">
+                    <div class="opp-cards" id="opp-cards-0"></div>
+                    <div class="opp-info">
+                        <div class="opp-avatar" id="opp-avatar-0">B</div>
+                        <span class="opp-name" id="opp-name-0">Bot 1</span>
+                        <span class="opp-count" id="opp-count-0">7</span>
                     </div>
                 </div>
-                <div class="opponent" id="opponent-left">
-                    <div class="opponent-avatar">🤖</div>
-                    <div class="opponent-info">
-                        <span class="opponent-name">Bot 2</span>
-                        <span class="card-count">7 cards</span>
+                <div class="opponent" id="opp-1">
+                    <div class="opp-cards-side" id="opp-cards-1"></div>
+                    <div class="opp-info-side">
+                        <div class="opp-avatar" id="opp-avatar-1">B</div>
+                        <span class="opp-name" id="opp-name-1">Bot 2</span>
+                        <span class="opp-count" id="opp-count-1">7</span>
                     </div>
                 </div>
-                <div class="opponent" id="opponent-right">
-                    <div class="opponent-avatar">🤖</div>
-                    <div class="opponent-info">
-                        <span class="opponent-name">Bot 3</span>
-                        <span class="card-count">7 cards</span>
+                <div class="opponent" id="opp-2">
+                    <div class="opp-cards-side" id="opp-cards-2"></div>
+                    <div class="opp-info-side opp-right-side">
+                        <div class="opp-avatar" id="opp-avatar-2">B</div>
+                        <span class="opp-name" id="opp-name-2">Bot 3</span>
+                        <span class="opp-count" id="opp-count-2">7</span>
                     </div>
                 </div>
             </div>
-
-            <!-- Center Area -->
             <div class="center-area">
                 <div class="direction-indicator" id="direction-indicator">↻</div>
-
-                <div class="discard-pile" id="discard-pile">
-                    <div class="card-slot" id="top-card"></div>
+                <div class="pile-area">
+                    <div class="discard-pile" id="discard-pile">
+                        <div class="card-slot" id="top-card"></div>
+                    </div>
+                    <div class="draw-pile" id="draw-pile" onclick="handleDraw()">
+                        <div class="card card-back-sm"></div>
+                        <span class="deck-count" id="deck-count">0</span>
+                    </div>
                 </div>
-
                 <div class="color-indicator" id="color-indicator"></div>
-
-                <div class="draw-pile" id="draw-pile" onclick="drawCard()">
-                    <div class="card card-back"></div>
-                    <span class="deck-count" id="deck-count">80</span>
-                </div>
             </div>
-
-            <!-- Player Hand -->
+            <div class="action-feed" id="action-feed"></div>
             <div class="player-area">
                 <div class="hand-controls">
-                    <button class="sort-btn" onclick="sortHand('color')">Sort Color</button>
-                    <button class="sort-btn" onclick="sortHand('value')">Sort Value</button>
+                    <button class="sort-btn" onclick="sortHand('color')">Color</button>
+                    <button class="sort-btn" onclick="sortHand('value')">Value</button>
                 </div>
                 <div class="hand" id="player-hand"></div>
             </div>
-
-            <!-- UNO Button -->
             <button class="uno-button" id="uno-btn" onclick="callUno()">UNO!</button>
         </div>
-
-        <!-- Color Picker -->
         <div class="color-picker" id="color-picker">
-            <div class="picker-title">Choose Color</div>
+            <div class="picker-title">Pick a Color</div>
             <div class="color-options">
-                <button class="color-btn red" onclick="chooseColor('red')">🔴</button>
-                <button class="color-btn blue" onclick="chooseColor('blue')">🔵</button>
-                <button class="color-btn green" onclick="chooseColor('green')">🟢</button>
-                <button class="color-btn yellow" onclick="chooseColor('yellow')">🟡</button>
+                <button class="color-btn c-red" onclick="chooseColor('red')"></button>
+                <button class="color-btn c-blue" onclick="chooseColor('blue')"></button>
+                <button class="color-btn c-green" onclick="chooseColor('green')"></button>
+                <button class="color-btn c-yellow" onclick="chooseColor('yellow')"></button>
             </div>
         </div>
-
-        <!-- Game Over Modal -->
         <div class="modal" id="game-over-modal">
             <div class="modal-content">
                 <h2 id="game-result-title">Game Over</h2>
@@ -181,15 +169,13 @@
         </div>
     </div>
 
-    <!-- Create Room Modal -->
     <div class="modal" id="create-modal">
         <div class="modal-content">
             <h2>Create Room</h2>
-            <input type="text" id="create-name" placeholder="Your name" maxlength="15">
+            <input type="text" id="create-name" placeholder="Your name" maxlength="12">
             <div class="player-count">
-                <button class="count-btn active" onclick="setPlayerCount(2)">2</button>
-                <button class="count-btn" onclick="setPlayerCount(3)">3</button>
-                <button class="count-btn" onclick="setPlayerCount(4)">4</button>
+                <button class="count-btn" onclick="setPlayerCount(2)">2</button>
+                <button class="count-btn active" onclick="setPlayerCount(4)">4</button>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-primary" onclick="createRoom()">Create</button>
@@ -197,57 +183,34 @@
             </div>
         </div>
     </div>
-
-    <!-- Join Room Modal -->
     <div class="modal" id="join-modal">
         <div class="modal-content">
             <h2>Join Room</h2>
-            <input type="text" id="join-code" placeholder="Room code (e.g., UNO-ABC12)" maxlength="9">
-            <input type="text" id="join-name" placeholder="Your name" maxlength="15">
+            <input type="text" id="join-code" placeholder="Room code" maxlength="9">
+            <input type="text" id="join-name" placeholder="Your name" maxlength="12">
             <div class="modal-actions">
                 <button class="btn btn-primary" onclick="joinRoom()">Join</button>
                 <button class="btn btn-secondary" onclick="closeModal('join-modal')">Cancel</button>
             </div>
         </div>
     </div>
-
-    <!-- Settings Modal -->
     <div class="modal" id="settings-modal">
         <div class="modal-content">
             <h2>Settings</h2>
-            <div class="setting-row">
-                <span>Sound Effects</span>
-                <button class="toggle active" id="sound-toggle" onclick="toggleSetting('sound')">ON</button>
-            </div>
-            <div class="setting-row">
-                <span>Turn Timer</span>
-                <button class="toggle active" id="timer-toggle" onclick="toggleSetting('timer')">ON</button>
-            </div>
-            <div class="setting-row">
-                <span>Card Stacking</span>
-                <button class="toggle active" id="stack-toggle" onclick="toggleSetting('stack')">ON</button>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('settings-modal')">Close</button>
-            </div>
+            <div class="setting-row"><span>Sound</span><button class="toggle active" id="sound-toggle" onclick="toggleSetting('sound')">ON</button></div>
+            <div class="setting-row"><span>Timer</span><button class="toggle active" id="timer-toggle" onclick="toggleSetting('timer')">ON</button></div>
+            <div class="setting-row"><span>Stack +2/+4</span><button class="toggle active" id="stack-toggle" onclick="toggleSetting('stack')">ON</button></div>
+            <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('settings-modal')">Close</button></div>
         </div>
     </div>
-
-    <!-- Leaderboard Modal -->
     <div class="modal" id="leaderboard-modal">
         <div class="modal-content">
-            <h2>🏆 Leaderboard</h2>
+            <h2>Stats</h2>
             <div class="leaderboard-list" id="leaderboard-list"></div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('leaderboard-modal')">Close</button>
-            </div>
+            <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('leaderboard-modal')">Close</button></div>
         </div>
     </div>
-
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
-
-    <!-- Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="js/game.js"></script>
