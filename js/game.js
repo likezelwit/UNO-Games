@@ -1,1025 +1,800 @@
-// ============================================
-// UNO GAME - Complete JavaScript
-// ============================================
+// =============================================
+// UNO GAME ENGINE - Enhanced
+// =============================================
 
-// ===== CONFIG =====
-const CONFIG = {
-  COLORS: ['red', 'blue', 'green', 'yellow'],
-  VALUES: ['0','1','2','3','4','5','6','7','8','9','skip','reverse','+2'],
-  SPECIAL: ['wild', '+4'],
-  CARD_SCORES: { '0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'skip':20,'reverse':20,'+2':20,'wild':50,'+4':50 },
-  BOT_NAMES: ['Bot Alpha', 'Bot Beta', 'Bot Gamma', 'Bot Delta'],
-  INITIAL_CARDS: 7,
-  TURN_TIME: 15000
-};
-
-// ===== FIREBASE CONFIG =====
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD3d4f9X9v9v9v9v9v9v9v9v9v9v9v9v9v",
-  authDomain: "uno-game-12345.firebaseapp.com",
-  databaseURL: "https://uno-game-12345-default-rtdb.firebaseio.com",
-  projectId: "uno-game-12345",
-  storageBucket: "uno-game-12345.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abc123def456"
+    apiKey: "AIzaSyDU0rqDjPdMsjhS_7MmvCYaoPoXpqeqyRE",
+    authDomain: "unno-f3338.firebaseapp.com",
+    databaseURL: "https://unno-f3338-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "unno-f3338",
+    storageBucket: "unno-f3338.firebasestorage.app",
+    messagingSenderId: "925580365013",
+    appId: "1:925580365013:web:0c29f8e8de6b96ee8e265c",
+    measurementId: "G-S7TD1HWV6J"
 };
 
-// ===== STATE =====
-let db = null;
-let gameState = null;
-let currentPlayer = null;
-let roomCode = null;
-let settings = { sound: true, timer: true, stack: true };
-let selectedMode = 'classic';
-let pendingWildCard = null;
-let turnTimer = null;
-let isProcessing = false;
+const CFG = {
+    COLORS: ['red','blue','green','yellow'],
+    NUMS: ['0','1','2','3','4','5','6','7','8','9'],
+    ACTIONS: ['skip','reverse','+2'],
+    WILDS: ['wild','+4'],
+    SCORES: {0:0,1:1,2:2,3:3,4:4,5:5,6:6,7:7,8:8,9:9,skip:20,reverse:20,'+2':20,wild:50,'+4':50},
+    BOTS: ['Rex','Nova','Blitz','Jinx'],
+    INIT: 7, TURN_MS: 15000
+};
+
+let db = null, G = null, me = null, roomCode = null, roomRef = null;
+let settings = { sound:true, timer:true, stack:true };
+let mode = 'classic', pendingWild = null, timerInt = null, busy = false;
+let lobbyCount = 4, isHost = false, lobbySub = null;
 
 // ===== AUDIO =====
-let audioCtx = null;
-
-function initAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
+let actx = null;
+function initAudio() { if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); }
+function sfx(type) {
+    if(!settings.sound||!actx) return;
+    try {
+        const t = actx.currentTime;
+        const make = (freq,dur,vol=.08) => {
+            const o=actx.createOscillator(), g=actx.createGain();
+            o.connect(g); g.connect(actx.destination);
+            o.frequency.setValueAtTime(freq,t);
+            g.gain.setValueAtTime(vol,t);
+            g.gain.exponentialRampToValueAtTime(.001,t+dur);
+            o.start(t); o.stop(t+dur);
+        };
+        switch(type) {
+            case 'play': make(520,.12); setTimeout(()=>make(780,.1),60); break;
+            case 'draw': make(280,.18,.06); break;
+            case 'skip': make(400,.1,.06); setTimeout(()=>make(250,.1,.06),80); break;
+            case 'reverse': make(350,.1,.06); setTimeout(()=>make(450,.1,.06),80); break;
+            case 'draw2': make(200,.2,.1); break;
+            case 'draw4': make(150,.25,.12); break;
+            case 'uno': [523,659,784].forEach((f,i)=>{setTimeout(()=>make(f,.18,.1),i*100)}); break;
+            case 'win': [523,659,784,1047].forEach((f,i)=>{setTimeout(()=>make(f,.25,.1),i*140);}); break;
+            case 'lose': make(300,.4,.08); break;
+            case 'tick': make(900,.04,.03); break;
+            case 'buzz': make(180,.08,.06); break;
+        }
+    } catch(e){}
 }
 
-function playSound(type) {
-  if (!settings.sound || !audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+// ===== UTILS =====
+const $=id=>document.getElementById(id);
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]]}return b};
+const save=(k,v)=>{try{localStorage.setItem('u_'+k,JSON.stringify(v))}catch(e){}};
+const load=(k,d)=>{try{const v=localStorage.getItem('u_'+k);return v?JSON.parse(v):d}catch(e){return d}};
 
-    const now = audioCtx.currentTime;
-    switch(type) {
-      case 'play':
-        osc.frequency.setValueAtTime(523, now);
-        osc.frequency.exponentialRampToValueAtTime(784, now + 0.1);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        osc.start(now);
-        osc.stop(now + 0.15);
-        break;
-      case 'draw':
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        break;
-      case 'uno':
-        [523, 659, 784].forEach((f, i) => {
-          const o = audioCtx.createOscillator();
-          const g = audioCtx.createGain();
-          o.connect(g);
-          g.connect(audioCtx.destination);
-          o.frequency.setValueAtTime(f, now + i * 0.12);
-          g.gain.setValueAtTime(0.12, now + i * 0.12);
-          g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.2);
-          o.start(now + i * 0.12);
-          o.stop(now + i * 0.12 + 0.2);
-        });
-        break;
-      case 'win':
-        [523, 659, 784, 1047].forEach((f, i) => {
-          const o = audioCtx.createOscillator();
-          const g = audioCtx.createGain();
-          o.connect(g);
-          g.connect(audioCtx.destination);
-          o.frequency.setValueAtTime(f, now + i * 0.15);
-          g.gain.setValueAtTime(0.1, now + i * 0.15);
-          g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.15 + 0.3);
-          o.start(now + i * 0.15);
-          o.stop(now + i * 0.15 + 0.3);
-        });
-        break;
-      case 'penalty':
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.exponentialRampToValueAtTime(80, now + 0.3);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
-        break;
-    }
-  } catch(e) {}
+function toast(msg) {
+    const t=$('toast'); if(!t)return;
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(t._t);
+    t._t=setTimeout(()=>t.classList.remove('show'),2200);
 }
-
-// ===== UTILITIES =====
-function $(id) { return document.getElementById(id); }
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
-
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return 'UNO-' + code;
-}
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function showToast(msg) {
-  const toast = $('toast');
-  if (!toast) return;
-  toast.textContent = msg;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2500);
-}
-
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const el = $(id);
-  if (el) el.classList.add('active');
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    const el=$(id); if(el) el.classList.add('active');
 }
-
-function showModal(id) {
-  const el = $(id);
-  if (el) el.classList.add('active');
-}
-
-function closeModal(id) {
-  const el = $(id);
-  if (el) el.classList.remove('active');
-}
-
-function saveStorage(key, val) {
-  try { localStorage.setItem('uno_' + key, JSON.stringify(val)); } catch(e) {}
-}
-
-function loadStorage(key, def) {
-  try { const v = localStorage.getItem('uno_' + key); return v ? JSON.parse(v) : def; } catch(e) { return def; }
+function showModal(id) { const el=$(id); if(el) el.classList.add('active'); }
+function closeModal(id) { const el=$(id); if(el) el.classList.remove('active'); }
+function genCode() {
+    const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let r=''; for(let i=0;i<5;i++) r+=c[0|Math.random()*c.length];
+    return 'UNO-'+r;
 }
 
 // ===== DECK =====
-function createDeck() {
-  const deck = [];
-  CONFIG.COLORS.forEach(color => {
-    deck.push({ id: generateId(), type: '0', color, value: 0 });
-    for (let i = 1; i <= 9; i++) {
-      deck.push({ id: generateId(), type: String(i), color, value: i });
-      deck.push({ id: generateId(), type: String(i), color, value: i });
-    }
-    ['skip', 'reverse', '+2'].forEach(type => {
-      deck.push({ id: generateId(), type, color, value: 20 });
-      deck.push({ id: generateId(), type, color, value: 20 });
+function makeDeck() {
+    const d=[];
+    CFG.COLORS.forEach(c=>{
+        d.push({id:uid(),type:'0',color:c,value:0});
+        for(let n=1;n<=9;n++){d.push({id:uid(),type:''+n,color:c,value:n});d.push({id:uid(),type:''+n,color:c,value:n})}
+        CFG.ACTIONS.forEach(a=>{d.push({id:uid(),type:a,color:c,value:20});d.push({id:uid(),type:a,color:c,value:20})}
     });
-  });
-  for (let i = 0; i < 4; i++) {
-    deck.push({ id: generateId(), type: 'wild', color: 'wild', value: 50 });
-    deck.push({ id: generateId(), type: '+4', color: 'wild', value: 50 });
-  }
-  return shuffle(deck);
+    const wc = mode==='wild'?8:4;
+    for(let i=0;i<wc;i++){d.push({id:uid(),type:'wild',color:'wild',value:50});d.push({id:uid(),type:'+4',color:'wild',value:50})}
+    return shuffle(d);
 }
-
-function drawFromDeck(count) {
-  if (!gameState) return [];
-  const cards = [];
-  for (let i = 0; i < count && gameState.deck.length > 0; i++) {
-    cards.push(gameState.deck.pop());
-  }
-  if (gameState.deck.length < 5 && gameState.discard.length > 1) {
-    const top = gameState.discard.pop();
-    gameState.deck = shuffle(gameState.discard);
-    gameState.discard = [top];
-  }
-  return cards;
+function draw(n) {
+    const c=[];
+    for(let i=0;i<n&&G.deck.length>0;i++) c.push(G.deck.pop());
+    if(G.deck.length<5&&G.discard.length>1){
+        const top=G.discard.pop();
+        G.deck=shuffle(G.discard);
+        G.discard=[top];
+    }
+    return c;
 }
 
 // ===== GAME INIT =====
-function initGame(players, mode) {
-  const deck = createDeck();
-  const hands = {};
-
-  players.forEach(p => {
-    hands[p.id] = drawFromDeck(CONFIG.INITIAL_CARDS);
-  });
-
-  // First card
-  let firstCard = deck.pop();
-  while (['wild', '+4', '+2', 'skip', 'reverse'].includes(firstCard.type)) {
-    deck.unshift(firstCard);
-    firstCard = deck.pop();
-  }
-
-  gameState = {
-    players,
-    hands,
-    deck,
-    discard: [firstCard],
-    currentIndex: 0,
-    direction: 1,
-    currentColor: firstCard.color,
-    wildColor: null,
-    mode,
-    settings: { ...settings },
-    gameOver: false,
-    winner: null,
-    unoCalled: {},
-    turnStart: Date.now()
-  };
-
-  // Ensure human player gets cards
-  const human = players.find(p => !p.isBot);
-  if (human && (!hands[human.id] || hands[human.id].length === 0)) {
-    hands[human.id] = drawFromDeck(CONFIG.INITIAL_CARDS);
-  }
-
-  return gameState;
+function initGame(players) {
+    const deck=makeDeck(), hands={};
+    players.forEach(p=>hands[p.id]=draw(CFG.INIT));
+    let first=deck.pop();
+    while(CFG.WILDS.includes(first.type)||CFG.ACTIONS.includes(first.type)){deck.unshift(first);first=deck.pop();}
+    G={
+        players, hands, deck, discard:[first],
+        cur:0, dir:1, color:first.color, wildColor:null,
+        mode, over:false, winner:null, unoCalled:{},
+        turnStart:Date.now(), log:[], stackPending:0, lastDrawId:null
+    };
+    me=players.find(p=>!p.bot);
 }
 
 // ===== RULES =====
-function isPlayable(card) {
-  if (!gameState) return false;
-  const top = gameState.discard[gameState.discard.length - 1];
-  const currentColor = gameState.wildColor || gameState.currentColor;
-
-  if (card.type === 'wild' || card.type === '+4') return true;
-  if (card.color === currentColor) return true;
-  if (card.type === top.type && !['wild', '+4'].includes(card.type)) return true;
-  return false;
+function canPlay(card) {
+    if(!G) return false;
+    const cc=G.wildColor||G.color;
+    if(card.type==='wild'||card.type==='+4') return true;
+    if(card.color===cc) return true;
+    const top=G.discard[G.discard.length-1];
+    if(card.type===top.type&&!CFG.WILDS.includes(card.type)) return true;
+    return false;
 }
+function playable(hand){return hand.filter(canPlay)}
 
-function getPlayableCards(hand) {
-  return hand.filter(isPlayable);
-}
+// ===== PLAY =====
+function doPlay(pid, cid, color) {
+    if(!G||G.over||busy) return {ok:false};
+    const p=G.players[G.cur];
+    if(p.id!==pid) return {ok:false,msg:'Not your turn'};
+    const h=G.hands[pid], idx=h.findIndex(c=>c.id===cid);
+    if(idx<0) return {ok:false,msg:'Card not found'};
+    const card=h[idx];
+    if(!canPlay(card)) return {ok:false,msg:'Cannot play that'};
+    busy=true;
+    h.splice(idx,1);
+    G.discard.push(card);
+    G.unoCalled[pid]=false;
+    G.lastDrawId=null;
 
-// ===== ACTIONS =====
-function playCard(playerId, cardId, chosenColor) {
-  if (!gameState || gameState.gameOver || isProcessing) return { success: false };
-
-  const player = gameState.players[gameState.currentIndex];
-  if (player.id !== playerId) return { success: false, error: 'Not your turn' };
-
-  const hand = gameState.hands[playerId];
-  const idx = hand.findIndex(c => c.id === cardId);
-  if (idx === -1) return { success: false, error: 'Card not found' };
-
-  const card = hand[idx];
-  if (!isPlayable(card)) return { success: false, error: 'Cannot play this card' };
-
-  isProcessing = true;
-
-  // Remove and place
-  hand.splice(idx, 1);
-  gameState.discard.push(card);
-  gameState.unoCalled[playerId] = false;
-
-  // Handle wild
-  if (card.type === 'wild' || card.type === '+4') {
-    if (!chosenColor) {
-      isProcessing = false;
-      return { success: false, error: 'Choose color' };
+    if(card.type==='wild'||card.type==='+4'){
+        if(!color){busy=false;return {ok:false,msg:'Pick color'};}
+        G.wildColor=color; G.color=color;
+        addLog(p.name+' chose '+color);
+    } else {
+        G.color=card.color; G.wildColor=null;
     }
-    gameState.wildColor = chosenColor;
-    gameState.currentColor = chosenColor;
-  } else {
-    gameState.currentColor = card.color;
-    gameState.wildColor = null;
-  }
 
-  // Effects
-  let skip = false;
-  let drawCount = 0;
+    let skip=false, dc=0;
+    if(card.type==='skip'){skip=true;addLog(p.name+' skipped '+G.players[(G.cur+G.dir+G.players.length)%G.players.length].name);}
+    else if(card.type==='reverse'){G.dir*=-1;if(G.players.length===2)skip=true;addLog(p.name+' reversed direction');}
+    else if(card.type==='+2'){dc=2;}
+    else if(card.type==='+4'){dc=4;}
 
-  switch(card.type) {
-    case 'skip': skip = true; break;
-    case 'reverse':
-      gameState.direction *= -1;
-      if (gameState.players.length === 2) skip = true;
-      break;
-    case '+2': drawCount = 2; break;
-    case '+4': drawCount = 4; break;
-  }
-
-  // Check win
-  if (hand.length === 0) {
-    gameState.gameOver = true;
-    gameState.winner = playerId;
-    playSound('win');
-    isProcessing = false;
-    return { success: true, action: 'win', card };
-  }
-
-  // Next player
-  let next = gameState.currentIndex + gameState.direction;
-  if (next >= gameState.players.length) next = 0;
-  if (next < 0) next = gameState.players.length - 1;
-
-  if (skip) {
-    next += gameState.direction;
-    if (next >= gameState.players.length) next = 0;
-    if (next < 0) next = gameState.players.length - 1;
-  }
-
-  // Draw penalty
-  if (drawCount > 0) {
-    const nextPlayer = gameState.players[next];
-    const drawn = drawFromDeck(drawCount);
-    gameState.hands[nextPlayer.id].push(...drawn);
-    showToast(`${nextPlayer.name} draws ${drawCount} cards!`);
-    playSound('penalty');
-
-    if (!settings.stack) {
-      next += gameState.direction;
-      if (next >= gameState.players.length) next = 0;
-      if (next < 0) next = gameState.players.length - 1;
+    // Stacking
+    if(dc>0 && settings.stack){
+        const topType=G.discard[G.discard.length-1].type;
+        if((topType==='+2'&&card.type==='+2')||(topType==='+4'&&card.type==='+4')){
+            G.stackPending+=dc;
+            addLog(p.name+' stacked +'+dc+'!');
+            sfx('draw'+dc);
+            G.cur=(G.cur+G.dir+G.players.length)%G.players.length;
+            G.turnStart=Date.now();
+            busy=false;
+            return {ok:true,card};
+        }
     }
-  }
 
-  gameState.currentIndex = next;
-  gameState.turnStart = Date.now();
-  playSound('play');
-  isProcessing = false;
+    if(h.length===0){
+        G.over=true; G.winner=pid; sfx('win');
+        busy=false;
+        return {ok:true,win:true,card};
+    }
 
-  return { success: true, action: 'play', card, nextPlayer: gameState.players[next] };
+    let next=(G.cur+G.dir+G.players.length)%G.players.length;
+    if(skip) next=(next+G.dir+G.players.length)%G.players.length;
+    if(dc>0){
+        const np=G.players[next];
+        const drawn=draw(dc);
+        G.hands[np.id].push(...drawn);
+        addLog(np.name+' draws '+dc);
+        sfx('draw'+dc);
+        if(!settings.stack) next=(next+G.dir+G.players.length)%G.players.length;
+    }
+
+    G.cur=next;
+    G.turnStart=Date.now();
+    sfx('play');
+    busy=false;
+    return {ok:true,card,next:G.players[next]};
 }
 
-function drawCardAction(playerId) {
-  if (!gameState || gameState.gameOver || isProcessing) return { success: false };
-
-  const player = gameState.players[gameState.currentIndex];
-  if (player.id !== playerId) return { success: false };
-
-  const hand = gameState.hands[playerId];
-  if (getPlayableCards(hand).length > 0) {
-    return { success: false, error: 'You have playable cards' };
-  }
-
-  const drawn = drawFromDeck(1);
-  if (drawn.length === 0) return { success: false, error: 'No cards left' };
-
-  gameState.hands[playerId].push(...drawn);
-  playSound('draw');
-
-  return { success: true, card: drawn[0], canPlay: isPlayable(drawn[0]) };
+function doDraw(pid) {
+    if(!G||G.over||busy) return {ok:false};
+    const p=G.players[G.cur];
+    if(p.id!==pid) return {ok:false};
+    if(playable(G.hands[pid]).length>0) return {ok:false,msg:'You have playable cards'};
+    const c=draw(1);
+    if(!c.length) return {ok:false,msg:'No cards'};
+    G.hands[pid].push(...c);
+    G.lastDrawId=c[0].id;
+    sfx('draw');
+    return {ok:true,card:c[0],playable:canPlay(c[0])};
 }
 
-function passTurn(playerId) {
-  if (!gameState || gameState.gameOver) return { success: false };
-  const player = gameState.players[gameState.currentIndex];
-  if (player.id !== playerId) return { success: false };
-
-  let next = gameState.currentIndex + gameState.direction;
-  if (next >= gameState.players.length) next = 0;
-  if (next < 0) next = gameState.players.length - 1;
-
-  gameState.currentIndex = next;
-  gameState.turnStart = Date.now();
-  gameState.unoCalled[playerId] = false;
-
-  return { success: true };
+function doPass(pid) {
+    if(!G||G.over) return false;
+    const p=G.players[G.cur];
+    if(p.id!==pid) return false;
+    G.cur=(G.cur+G.dir+G.players.length)%G.players.length;
+    G.turnStart=Date.now();
+    G.lastDrawId=null;
+    return true;
 }
 
-function callUnoAction(playerId) {
-  if (!gameState) return { success: false };
-  const hand = gameState.hands[playerId];
-  if (!hand || hand.length !== 1) return { success: false };
+function doUno(pid) {
+    if(!G) return false;
+    const h=G.hands[pid];
+    if(!h||h.length!==1) return false;
+    G.unoCalled[pid]=true;
+    sfx('uno');
+    addLog(pid===me.id?'You called UNO!':G.players.find(p=>p.id===pid).name+' called UNO!');
+    return true;
+}
 
-  gameState.unoCalled[playerId] = true;
-  playSound('uno');
-  showToast('UNO!');
-  return { success: true };
+function addLog(msg) {
+    if(!G) return;
+    G.log.unshift({msg, t:Date.now()});
+    if(G.log.length>30) G.log.length=30;
+    renderFeed();
 }
 
 // ===== BOT AI =====
-function botChooseCard(bot) {
-  const hand = gameState.hands[bot.id];
-  const playable = getPlayableCards(hand);
-  if (playable.length === 0) return null;
-
-  // Smart-ish: prefer action cards, save wilds
-  const sorted = [...playable].sort((a, b) => {
-    const pa = CONFIG.CARD_SCORES[a.type] || 0;
-    const pb = CONFIG.CARD_SCORES[b.type] || 0;
-    if (hand.length <= 2) return pa - pb; // Save wilds when low
-    return pb - pa; // Play high value
-  });
-
-  return sorted[0];
+function botPick(bot) {
+    const h=G.hands[bot.id], pl=playable(h);
+    if(!pl.length) return null;
+    // Strategy: prioritize color matches, save wilds, use action cards tactically
+    const scored=pl.map(c=>{
+        let s=0;
+        if(c.type==='wild') s=h.length<=3?99:5;
+        else if(c.type==='+4') s=h.length<=2?98:4;
+        else if(c.type==='+2') s=15;
+        else if(c.type==='skip') s=h.length<=3?12:14;
+        else if(c.type==='reverse') s=h.length<=3?11:8;
+        else s=c.value;
+        // Prefer current color
+        if(c.color===(G.wildColor||G.color)) s+=6;
+        return {card:c,score:s};
+    });
+    scored.sort((a,b)=>b.score-a.score);
+    return scored[0].card;
 }
-
-function botChooseColor(bot) {
-  const hand = gameState.hands[bot.id];
-  const counts = {};
-  hand.forEach(c => {
-    if (c.color !== 'wild') counts[c.color] = (counts[c.color] || 0) + 1;
-  });
-  const colors = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  return colors.length > 0 ? colors[0][0] : CONFIG.COLORS[0];
+function botColor(bot) {
+    const h=G.hands[bot.id], ct={};
+    h.forEach(c=>{if(c.color!=='wild') ct[c.color]=(ct[c.color]||0)+1});
+    return Object.entries(ct).sort((a,b)=>b[1]-a[1])[0][0]||CFG.COLORS[0];
 }
-
-function processBotTurn() {
-  if (!gameState || gameState.gameOver) return;
-
-  const player = gameState.players[gameState.currentIndex];
-  if (!player.isBot) return;
-
-  setTimeout(() => {
-    const card = botChooseCard(player);
-
-    if (card) {
-      let color = null;
-      if (card.type === 'wild' || card.type === '+4') {
-        color = botChooseColor(player);
-      }
-
-      const result = playCard(player.id, card.id, color);
-      if (result.success) {
-        renderGame();
-        if (result.action === 'win') {
-          endGame();
+function botTurn() {
+    if(!G||G.over) return;
+    const p=G.players[G.cur];
+    if(!p.bot) return;
+    const delay=800+Math.random()*700;
+    setTimeout(()=>{
+        if(!G||G.over) return;
+        const card=botPick(p);
+        if(card){
+            let col=null;
+            if(card.type==='wild'||card.type==='+4') col=botColor(p);
+            const r=doPlay(p.id,card.id,col);
+            if(r.ok){
+                renderAll();
+                if(r.win){endGame();return;}
+                botTurn();
+            }
         } else {
-          checkBotTurn();
+            const dr=doDraw(p.id);
+            renderAll();
+            if(dr.ok&&dr.playable){
+                setTimeout(()=>{
+                    if(!G||G.over) return;
+                    const r2=doPlay(p.id,dr.card.id);
+                    if(r2.ok){renderAll();if(r2.win){endGame();return;}botTurn();}
+                    else{doPass(p.id);renderAll();botTurn();}
+                },500);
+            } else {
+                setTimeout(()=>{doPass(p.id);renderAll();botTurn();},400);
+            }
         }
-      }
-    } else {
-      // Draw
-      const drawResult = drawCardAction(player.id);
-      renderGame();
-
-      if (drawResult.success && drawResult.canPlay) {
-        setTimeout(() => {
-          const playResult = playCard(player.id, drawResult.card.id);
-          if (playResult.success) {
-            renderGame();
-            if (playResult.action === 'win') endGame();
-            else checkBotTurn();
-          }
-        }, 600);
-      } else {
-        setTimeout(() => {
-          passTurn(player.id);
-          renderGame();
-          checkBotTurn();
-        }, 600);
-      }
-    }
-
-    // Call UNO
-    const hand = gameState.hands[player.id];
-    if (hand && hand.length === 1 && Math.random() > 0.1) {
-      setTimeout(() => callUnoAction(player.id), 400);
-    }
-  }, 1000 + Math.random() * 800);
-}
-
-function checkBotTurn() {
-  if (!gameState || gameState.gameOver) return;
-  const current = gameState.players[gameState.currentIndex];
-  if (current.isBot) processBotTurn();
-  else startTurnTimer();
+        // UNO call
+        const h=G.hands[p.id];
+        if(h&&h.length===1&&Math.random()>.05) doUno(p.id);
+    },delay);
 }
 
 // ===== RENDERING =====
-function createCardEl(card, isPlayable = false, isBack = false) {
-  const div = document.createElement('div');
-  div.className = 'card';
-  div.dataset.cardId = card.id;
-
-  if (isBack) {
-    div.classList.add('card-back');
-    return div;
-  }
-
-  if (isPlayable) div.classList.add('playable');
-  div.classList.add(`card-${card.color}`);
-
-  const val = card.type === 'skip' ? '⊘' : card.type === 'reverse' ? '⇄' : card.type;
-  div.innerHTML = `
-    <span class="card-corner top-left">${val}</span>
-    <span class="card-value">${val}</span>
-    <span class="card-corner bottom-right">${val}</span>
-  `;
-
-  return div;
+function cardHTML(card, playable, small) {
+    const cls=small?'card-back-sm':'card';
+    if(!small){
+        if(playable) cls+=' playable';
+        if(card.color!=='wild') cls+=' card-'+card.color;
+        else cls+=' card-wild';
+    }
+    const sym = card.type==='skip'?'⊘':card.type==='reverse'?'⇄':card.type;
+    const vs=small?'small-val':'card-value';
+    const vc=small?'':('card-value'+(card.type.length>2?' small-val':'':''));
+    const cs=small?'':'card-corner tl';
+    const ce=small?'':'card-corner br';
+    return `<div class="${cls}" data-cid="${card.id}">${sym?`<span class="${cs}">${sym}</span><span class="${vc}">${sym}</span><span class="${ce}">${sym}</span>`:''}</div>`;
 }
 
-function renderGame() {
-  if (!gameState) return;
-
-  renderHand();
-  renderDiscard();
-  renderOpponents();
-  renderUI();
+function renderAll() {
+    if(!G) return;
+    renderHand(); renderDiscard(); renderOpps(); renderUI(); renderFeed();
 }
 
 function renderHand() {
-  const container = $('player-hand');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human) return;
-
-  const hand = gameState.hands[human.id] || [];
-  const isMyTurn = gameState.players[gameState.currentIndex].id === human.id;
-  const playable = isMyTurn && !gameState.gameOver ? getPlayableCards(hand) : [];
-
-  hand.forEach(card => {
-    const canPlay = playable.some(c => c.id === card.id);
-    const el = createCardEl(card, canPlay);
-    if (canPlay && !gameState.gameOver) {
-      el.onclick = () => handleCardClick(card);
-    }
-    container.appendChild(el);
-  });
+    const c=$('player-hand'); if(!c) return; c.innerHTML='';
+    if(!me) return;
+    const h=G.hands[me.id]||[];
+    const myTurn=G.players[G.cur].id===me.id&&!G.over;
+    const pl=myTurn?playable(h):[];
+    h.forEach(card=>{
+        const ok=pl.some(x=>x.id===card.id);
+        const el=document.createElement('div');
+        el.innerHTML=cardHTML(card,ok);
+        if(ok) el.onclick=()=>handlePlay(card);
+        if(!ok&&myTurn) el.classList.add('disabled');
+        c.appendChild(el);
+    });
 }
 
 function renderDiscard() {
-  const container = $('top-card');
-  if (!container || gameState.discard.length === 0) return;
-
-  container.innerHTML = '';
-  const top = gameState.discard[gameState.discard.length - 1];
-  container.appendChild(createCardEl(top));
-
-  // Color indicator
-  const indicator = $('color-indicator');
-  if (indicator) {
-    const color = gameState.wildColor || gameState.currentColor;
-    indicator.className = 'color-indicator ' + color;
-  }
+    const c=$('top-card'); if(!c||!G.discard.length) return;
+    const top=G.discard[G.discard.length-1];
+    c.innerHTML=cardHTML(top,false);
+    const ci=$('color-indicator');
+    if(ci) ci.className='color-indicator '+(G.wildColor||G.color);
 }
 
-function renderOpponents() {
-  const bots = gameState.players.filter(p => p.isBot);
-  const positions = ['opponent-top', 'opponent-left', 'opponent-right'];
-
-  bots.forEach((bot, i) => {
-    const el = $(positions[i]);
-    if (!el) return;
-
-    const hand = gameState.hands[bot.id] || [];
-    const nameEl = el.querySelector('.opponent-name');
-    const countEl = el.querySelector('.card-count');
-
-    if (nameEl) nameEl.textContent = bot.name;
-    if (countEl) countEl.textContent = hand.length + ' cards';
-
-    // Highlight active
-    const isActive = gameState.players[gameState.currentIndex].id === bot.id;
-    el.style.opacity = isActive ? '1' : '0.6';
-    el.style.transform = isActive ? 'scale(1.05)' : 'scale(1)';
-  });
+function renderOpps() {
+    const bots=G.players.filter(p=>p.bot);
+    bots.forEach((b,i)=>{
+        const cards=$('opp-cards-'+i);
+        const name=$('opp-name-'+i);
+        const count=$('opp-count-'+i);
+        const avatar=$('opp-avatar-'+i);
+        const opp=$('opp-'+i);
+        if(!cards||!name||!count) return;
+        const h=G.hands[b.id]||[];
+        name.textContent=b.name;
+        count.textContent=h.length+' cards';
+        avatar.textContent=b.name[0];
+        cards.innerHTML=h.slice(0,8).map(()=>'<div class="opp-mini-card"></div>').join('');
+        const isActive=G.players[G.cur].id===b.id;
+        opp.classList.toggle('active',isActive);
+    });
 }
 
 function renderUI() {
-  // Deck count
-  const deckCount = $('deck-count');
-  if (deckCount) deckCount.textContent = gameState.deck.length;
-
-  // Direction
-  const dir = $('direction-indicator');
-  if (dir) {
-    dir.textContent = gameState.direction === 1 ? '↻' : '↺';
-    dir.classList.toggle('reverse', gameState.direction === -1);
-  }
-
-  // Room code
-  const code = $('game-room-code');
-  if (code) code.textContent = roomCode || 'LOCAL';
-
-  // UNO button
-  const unoBtn = $('uno-btn');
-  if (unoBtn) {
-    const human = gameState.players.find(p => !p.isBot);
-    if (human) {
-      const hand = gameState.hands[human.id];
-      unoBtn.style.display = (hand && hand.length === 1) ? 'block' : 'none';
-      unoBtn.classList.remove('called');
+    const dc=$('deck-count'); if(dc) dc.textContent=G.deck.length;
+    const dir=$('direction-indicator');
+    if(dir){dir.textContent=G.dir===1?'↻':'↺';dir.classList.toggle('rev',G.dir===-1);}
+    const rc=$('game-room-code'); if(rc) rc.textContent=roomCode||'LOCAL';
+    const ub=$('uno-btn');
+    if(ub){
+        const h=me?G.hands[me.id]:[];
+        const show=h.length===1&&!G.unoCalled[me.id]&&!G.over;
+        ub.classList.toggle('visible',show);
+        ub.classList.remove('called');
     }
-  }
 }
 
-// ===== UI HANDLERS =====
-function handleCardClick(card) {
-  if (!gameState || gameState.gameOver || isProcessing) return;
+function renderFeed() {
+    const f=$('action-feed'); if(!f) return;
+    const now=Date.now();
+    f.innerHTML=G.log.filter(l=>now-l.t<4000).slice(0,6).map(l=>
+        `<div class="feed-item"><b>${l.msg}</b></div>`
+    ).join('');
+}
 
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human) return;
-
-  if (card.type === 'wild' || card.type === '+4') {
-    pendingWildCard = card;
-    showModal('color-picker');
-    return;
-  }
-
-  executePlay(human.id, card.id);
+// ===== HANDLERS =====
+function handlePlay(card) {
+    if(!G||G.over||busy) return;
+    if(card.type==='wild'||card.type==='+4'){pendingWild=card;showModal('color-picker');return;}
+    execPlay(card.id);
 }
 
 function chooseColor(color) {
-  closeModal('color-picker');
-  if (!pendingWildCard) return;
-
-  const human = gameState.players.find(p => !p.isBot);
-  if (human) {
-    executePlay(human.id, pendingWildCard.id, color);
-  }
-  pendingWildCard = null;
+    closeModal('color-picker');
+    if(!pendingWild) return;
+    execPlay(pendingWild.id,color);
+    pendingWild=null;
 }
 
-function executePlay(playerId, cardId, color) {
-  const result = playCard(playerId, cardId, color);
-
-  if (result.success) {
-    renderGame();
-
-    if (result.action === 'win') {
-      endGame();
-    } else {
-      checkBotTurn();
+function execPlay(cid) {
+    const r=doPlay(me.id,cid);
+    if(r.ok){
+        const el=document.querySelector(`[data-cid="${cid}"]`);
+        if(el){el.classList.add('anim-play');setTimeout(()=>el.classList.remove('anim-play'),350);}
+        renderAll();
+        if(r.win){endGame();}
+        else botTurn();
+    } else if(r.msg){
+        toast(r.msg);
+        const el=document.querySelector(`[data-cid="${cid}"]`);
+        if(el){el.classList.add('anim-shake');setTimeout(()=>el.classList.remove('anim-shake'),300);}
+        sfx('buzz');
     }
-  } else if (result.error) {
-    showToast(result.error);
-    const el = document.querySelector(`[data-card-id="${cardId}"]`);
-    if (el) {
-      el.classList.add('card-anim-shake');
-      setTimeout(() => el.classList.remove('card-anim-shake'), 300);
-    }
-  }
 }
 
-function drawCard() {
-  if (!gameState || gameState.gameOver || isProcessing) return;
-
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human) return;
-
-  const result = drawCardAction(human.id);
-
-  if (result.success) {
-    renderGame();
-
-    if (result.canPlay) {
-      // Auto-highlight or let player choose
-      showToast('Card drawn - you can play it!');
-      renderGame(); // Re-render to show playable
-    } else {
-      setTimeout(() => {
-        passTurn(human.id);
-        renderGame();
-        checkBotTurn();
-      }, 500);
-    }
-  } else if (result.error) {
-    showToast(result.error);
-  }
+function handleDraw() {
+    if(!G||G.over||busy) return;
+    const r=doDraw(me.id);
+    if(r.ok){
+        renderAll();
+        if(r.playable) toast('You can play the drawn card!');
+        else {
+            setTimeout(()=>{doPass(me.id);renderAll();botTurn();},400);
+        }
+    } else if(r.msg) toast(r.msg);
 }
 
 function callUno() {
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human) return;
-
-  const result = callUnoAction(human.id);
-  if (result.success) {
-    const btn = $('uno-btn');
-    if (btn) btn.classList.add('called');
-  }
+    if(!me||!G) return;
+    if(doUno(me.id)){
+        const ub=$('uno-btn');
+        if(ub){ub.classList.add('called');}
+        renderFeed();
+    } else toast('You can only call UNO with 1 card!');
 }
 
-function sortHand(criteria) {
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human || !gameState) return;
-
-  const hand = gameState.hands[human.id];
-  if (criteria === 'color') {
-    const order = { red: 0, blue: 1, green: 2, yellow: 3, wild: 4 };
-    hand.sort((a, b) => (order[a.color] || 99) - (order[b.color] || 99));
-  } else {
-    hand.sort((a, b) => (a.value || 0) - (b.value || 0));
-  }
-  renderHand();
+function sortHand(by) {
+    if(!me||!G) return;
+    const h=G.hands[me.id];
+    if(by==='color'){
+        const o={red:0,blue:1,green:2,yellow:3,wild:4};
+        h.sort((a,b)=>(o[a.color]??4)-(o[b.color]??4));
+    } else {
+        h.sort((a,b)=>(a.value||0)-(b.value||0));
+    }
+    renderHand();
 }
 
 // ===== TIMER =====
-function startTurnTimer() {
-  if (turnTimer) clearInterval(turnTimer);
-  if (!settings.timer || !gameState || gameState.gameOver) return;
-
-  const timerEl = $('turn-timer');
-
-  turnTimer = setInterval(() => {
-    if (!gameState || gameState.gameOver) {
-      clearInterval(turnTimer);
-      return;
-    }
-
-    const elapsed = Date.now() - gameState.turnStart;
-    const remaining = Math.max(0, CONFIG.TURN_TIME - elapsed);
-    const seconds = Math.ceil(remaining / 1000);
-
-    if (timerEl) {
-      timerEl.textContent = `⏱️ ${seconds}s`;
-      timerEl.classList.toggle('warning', seconds <= 3);
-    }
-
-    if (remaining <= 0) {
-      clearInterval(turnTimer);
-      const human = gameState.players.find(p => !p.isBot);
-      if (human && gameState.players[gameState.currentIndex].id === human.id) {
-        drawCardAction(human.id);
-        passTurn(human.id);
-        renderGame();
-        checkBotTurn();
-      }
-    }
-  }, 100);
+function startTimer() {
+    stopTimer();
+    if(!settings.timer||!G||G.over) return;
+    const el=$('turn-timer');
+    timerInt=setInterval(()=>{
+        if(!G||G.over){stopTimer();return;}
+        const left=Math.max(0,CFG.TURN_MS-(Date.now()-G.turnStart));
+        const s=Math.ceil(left/1000);
+        if(el){
+            el.textContent=s+'s';
+            el.classList.toggle('warning',s<=3);
+        }
+        if(left<=0){
+            stopTimer();
+            if(G.players[G.cur].id===me.id){
+                toast('Time is up!');
+                if(G.lastDrawId){
+                    doPass(me.id);
+                } else {
+                    const dr=doDraw(me.id);
+                    if(dr.ok&&dr.playable){
+                        // One chance to play drawn card
+                        setTimeout(()=>{
+                            if(!G||G.over) return;
+                            const pl=playable(G.hands[me.id]);
+                            if(pl.length>0) renderAll(); // let them click
+                            else {doPass(me.id);renderAll();botTurn();}
+                        },800);
+                    } else {
+                        doPass(me.id); renderAll(); botTurn();
+                    }
+                }
+            }
+        }
+        if(s<=3&&s>0) sfx('tick');
+    },100);
 }
+function stopTimer(){if(timerInt){clearInterval(timerInt);timerInt=null;}}
 
 // ===== GAME FLOW =====
 function startQuickMatch() {
-  const name = loadStorage('playerName', 'You');
-  const players = [
-    { id: 'p_' + generateId(), name, isBot: false },
-    { id: 'b1_' + generateId(), name: CONFIG.BOT_NAMES[0], isBot: true },
-    { id: 'b2_' + generateId(), name: CONFIG.BOT_NAMES[1], isBot: true },
-    { id: 'b3_' + generateId(), name: CONFIG.BOT_NAMES[2], isBot: true }
-  ];
-
-  initGame(players, selectedMode);
-  roomCode = null;
-
-  showScreen('game-screen');
-  renderGame();
-  startTurnTimer();
-}
-
-function endGame() {
-  if (turnTimer) clearInterval(turnTimer);
-
-  const modal = $('game-over-modal');
-  const title = $('game-result-title');
-  const results = $('game-results');
-
-  if (!modal || !results) return;
-
-  const human = gameState.players.find(p => !p.isBot);
-  const isWinner = human && gameState.winner === human.id;
-
-  if (title) title.textContent = isWinner ? '🎉 You Win!' : '🎮 Game Over';
-
-  // Calculate scores
-  const sorted = gameState.players.map(p => ({
-    name: p.name,
-    score: gameState.hands[p.id].reduce((s, c) => s + (CONFIG.CARD_SCORES[c.type] || 0), 0),
-    isWinner: p.id === gameState.winner,
-    isHuman: !p.isBot
-  })).sort((a, b) => a.score - b.score);
-
-  results.innerHTML = sorted.map((r, i) => `
-    <div class="result-item ${r.isWinner ? 'winner' : ''}">
-      <span class="result-rank">${i + 1}</span>
-      <span class="result-name">${r.name} ${r.isHuman ? '(You)' : ''}</span>
-      <span class="result-score">${r.score} pts</span>
-    </div>
-  `).join('');
-
-  // Confetti for winner
-  if (isWinner) {
-    for (let i = 0; i < 50; i++) {
-      const c = document.createElement('div');
-      c.className = 'confetti';
-      c.style.left = Math.random() * 100 + '%';
-      c.style.background = ['#ff3b5c', '#4dabf7', '#51cf66', '#ffd43b'][Math.floor(Math.random() * 4)];
-      c.style.animationDelay = Math.random() * 2 + 's';
-      document.body.appendChild(c);
-      setTimeout(() => c.remove(), 5000);
-    }
-  }
-
-  showModal('game-over-modal');
-
-  // Save stats
-  const stats = loadStorage('stats', { games: 0, wins: 0, xp: 0, level: 1 });
-  stats.games++;
-  if (isWinner) stats.wins++;
-  stats.xp += isWinner ? 250 : 50;
-  if (stats.xp >= stats.level * 300) {
-    stats.level++;
-    stats.xp = 0;
-  }
-  saveStorage('stats', stats);
-}
-
-function playAgain() {
-  closeModal('game-over-modal');
-  startQuickMatch();
-}
-
-function leaveGame() {
-  if (turnTimer) clearInterval(turnTimer);
-  gameState = null;
-  backToMenu();
-}
-
-// ===== MENU FUNCTIONS =====
-function selectMode(mode) {
-  selectedMode = mode;
-  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
-  document.querySelector(`[data-mode="${mode}"]`)?.classList.add('active');
-  saveStorage('mode', mode);
-}
-
-function showCreateLobby() {
-  showModal('create-modal');
-}
-
-function showJoinLobby() {
-  showModal('join-modal');
+    const name=load('name','Player');
+    const bots=CFG.BOTS.slice(0,3).map(n=>({id:uid(),name:n,bot:true}));
+    initGame([{id:uid(),name,bot:false},...bots]);
+    roomCode=null; isHost=false;
+    showScreen('game-screen');
+    renderAll(); startTimer();
+    addLog('Game started!');
 }
 
 function createRoom() {
-  const nameInput = $('create-name');
-  const name = nameInput ? nameInput.value.trim() : 'Player';
-  if (!name) { showToast('Enter your name'); return; }
-
-  saveStorage('playerName', name);
-  closeModal('create-modal');
-
-  // For now, start local game (Firebase can be added later)
-  roomCode = generateRoomCode();
-  startQuickMatch();
-  showToast('Room created: ' + roomCode);
+    const name=$('create-name')?.value.trim();
+    if(!name){toast('Enter your name');return;}
+    save('name',name);
+    closeModal('create-modal');
+    roomCode=genCode();
+    isHost=true; lobbyCount=4;
+    showScreen('lobby-screen');
+    $('lobby-code-display').textContent=roomCode;
+    renderLobby();
+    initFirebase();
+    toast('Room created!');
 }
 
 function joinRoom() {
-  const codeInput = $('join-code');
-  const nameInput = $('join-name');
-  const code = codeInput ? codeInput.value.trim().toUpperCase() : '';
-  const name = nameInput ? nameInput.value.trim() : 'Player';
-
-  if (!code) { showToast('Enter room code'); return; }
-  if (!name) { showToast('Enter your name'); return; }
-
-  saveStorage('playerName', name);
-  closeModal('join-modal');
-  showToast('Joining ' + code + '...');
-
-  // Placeholder - would connect to Firebase
-  setTimeout(() => startQuickMatch(), 1000);
+    const code=$('join-code')?.value.trim().toUpperCase();
+    const name=$('join-name')?.value.trim();
+    if(!code){toast('Enter room code');return;}
+    if(!name){toast('Enter your name');return;}
+    save('name',name);
+    closeModal('join-modal');
+    roomCode=code; isHost=false;
+    showScreen('lobby-screen');
+    $('lobby-code-display').textContent=roomCode;
+    renderLobby();
+    initFirebase();
+    toast('Joining...');
 }
 
-function showSettings() {
-  const s = loadStorage('settings', settings);
-  settings = { ...settings, ...s };
-
-  $('sound-toggle')?.classList.toggle('active', settings.sound);
-  $('timer-toggle')?.classList.toggle('active', settings.timer);
-  $('stack-toggle')?.classList.toggle('active', settings.stack);
-
-  showModal('settings-modal');
+function leaveLobby() {
+    stopTimer();
+    if(lobbySub) lobbySub();
+    roomCode=null; roomRef=null; isHost=false;
+    showScreen('menu-screen');
 }
 
-function toggleSetting(key) {
-  settings[key] = !settings[key];
-  const btn = $(key + '-toggle');
-  if (btn) {
-    btn.classList.toggle('active', settings[key]);
-    btn.textContent = settings[key] ? 'ON' : 'OFF';
-  }
-  saveStorage('settings', settings);
+function startFromLobby() {
+    if(!isHost) return;
+    if(lobbySub) lobbySub();
+    // Create game with bots to fill
+    const name=load('name','Player');
+    const needed=Math.max(0,lobbyCount-1);
+    const bots=CFG.BOTS.slice(0,needed).map(n=>({id:uid(),name:n,bot:true}));
+    initGame([{id:uid(),name,bot:false},...bots]);
+    showScreen('game-screen');
+    renderAll(); startTimer();
+    addLog('Game started!');
 }
 
-function showLeaderboard() {
-  const list = $('leaderboard-list');
-  if (list) {
-    const stats = loadStorage('stats', { games: 0, wins: 0, xp: 0, level: 1 });
-    list.innerHTML = `
-      <div class="leaderboard-item">
-        <span class="leaderboard-rank">🏆</span>
-        <span class="leaderboard-name">Your Stats</span>
-        <span class="leaderboard-score">${stats.wins}W / ${stats.games}G</span>
-      </div>
-      <div class="leaderboard-item">
-        <span class="leaderboard-rank">⭐</span>
-        <span class="leaderboard-name">Level ${stats.level}</span>
-        <span class="leaderboard-score">${stats.xp} XP</span>
-      </div>
-    `;
-  }
-  showModal('leaderboard-modal');
+function leaveGame() {
+    stopTimer();
+    if(roomRef&&db){
+        db.ref('rooms/'+roomCode+'/players/'+me.id).remove();
+    }
+    roomCode=null; roomRef=null; isHost=false;
+    G=null; showScreen('menu-screen');
+    toast('Left game');
+}
+
+function endGame() {
+    stopTimer();
+    if(roomRef&&db){
+        db.ref('rooms/'+roomCode+'/gameOver').set(true);
+    }
+    const won=me&&G.winner===me.id;
+    sfx(won?'win':'lose');
+
+    const title=$('game-result-title');
+    const results=$('game-results');
+    if(!title||!results) return;
+
+    title.textContent=won?'You Win!':'Game Over';
+
+    const sorted=G.players.map(p=>({
+        name:p.name, isMe:!p.bot,
+        score:(G.hands[p.id]||[]).reduce((s,c)=>s+(CFG.SCORES[c.type]||0),0),
+        isWin:p.id===G.winner
+    })).sort((a,b)=>a.score-b.score);
+
+    results.innerHTML=sorted.map((r,i)=>`
+        <div class="result-item ${r.isWin?'winner':''}">
+            <span class="result-rank">${i+1}</span>
+            <span class="result-name">${r.name}${r.isMe?' (You)':''}</span>
+            <span class="result-score">${r.score}pts</span>
+        </div>`).join('');
+
+    if(won){
+        for(let i=0;i<60;i++){
+            const c=document.createElement('div');
+            c.className='confetti';
+            c.style.left=Math.random()*100+'%';
+            c.style.background=['#E63946','#457BF5','#2DC66B','#F5C542'][0|Math.random()*4];
+            c.style.animationDelay=Math.random()*2+'s';
+            c.style.width=(4+Math.random()*8)+'px';
+            c.style.height=(4+Math.random()*8)+'px';
+            document.body.appendChild(c);
+            setTimeout(()=>c.remove(),5000);
+        }
+    }
+
+    // Stats
+    const st=load('stats',{g:0,w:0,x:0,l:1});
+    st.g++; if(won)st.w++;
+    st.x+=won?300:60;
+    if(st.x>=st.l*300){st.l++;st.x=0;}
+    save('stats',st);
+
+    showModal('game-over-modal');
+}
+
+function playAgain() {
+    closeModal('game-over-modal');
+    if(roomCode&&isHost&&db){
+        db.ref('rooms/'+roomCode).remove();
+    }
+    startQuickMatch();
 }
 
 function backToMenu() {
-  if (turnTimer) clearInterval(turnTimer);
-  showScreen('menu-screen');
+    stopTimer();
+    G=null; showScreen('menu-screen');
+    updateMenuProfile();
 }
 
-function setPlayerCount(n) {
-  document.querySelectorAll('#create-modal .count-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+function selectMode(m) {
+    mode=m;
+    document.querySelectorAll('.mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
+    save('mode',m);
 }
 
-// ===== INITIALIZATION =====
-function initApp() {
-  // Create particles
-  const container = $('particles');
-  if (container) {
-    for (let i = 0; i < 20; i++) {
-      const p = document.createElement('div');
-      p.className = 'particle';
-      p.style.left = Math.random() * 100 + '%';
-      p.style.top = Math.random() * 100 + '%';
-      p.style.background = ['#ff3b5c', '#4dabf7', '#51cf66', '#ffd43b'][Math.floor(Math.random() * 4)];
-      p.style.animationDelay = Math.random() * 20 + 's';
-      p.style.animationDuration = (15 + Math.random() * 10) + 's';
-      container.appendChild(p);
-    }
-  }
-
-  // Load saved data
-  const savedMode = loadStorage('mode', 'classic');
-  selectMode(savedMode);
-
-  const savedName = loadStorage('playerName', '');
-  if (savedName) {
-    const nameEl = $('menu-player-name');
-    if (nameEl) nameEl.textContent = savedName;
-  }
-
-  const stats = loadStorage('stats', { level: 1, xp: 0 });
-  const levelEl = $('player-level');
-  const xpFill = $('xp-fill');
-  if (levelEl) levelEl.textContent = stats.level;
-  if (xpFill) {
-    const max = stats.level * 300;
-    xpFill.style.width = Math.min((stats.xp / max) * 100, 100) + '%';
-  }
-
-  // Loading animation
-  let progress = 0;
-  const bar = $('loading-progress');
-  const text = $('loading-text');
-
-  const interval = setInterval(() => {
-    progress += Math.random() * 25 + 10;
-    if (progress >= 100) {
-      progress = 100;
-      clearInterval(interval);
-      if (bar) bar.style.width = '100%';
-      if (text) text.textContent = 'Ready!';
-
-      setTimeout(() => {
-        showScreen('menu-screen');
-      }, 400);
-    } else {
-      if (bar) bar.style.width = progress + '%';
-    }
-  }, 200);
-
-  // Init audio on first interaction
-  document.addEventListener('click', initAudio, { once: true });
-  document.addEventListener('touchstart', initAudio, { once: true });
-
-  // Try Firebase
-  try {
-    if (typeof firebase !== 'undefined') {
-      firebase.initializeApp(FIREBASE_CONFIG);
-      db = firebase.database();
-      console.log('Firebase connected');
-    }
-  } catch(e) {
-    console.log('Firebase not available, running offline');
-  }
+// ===== MENU UI =====
+function showCreateLobby(){showModal('create-modal');}
+function showJoinLobby(){showModal('join-modal');}
+function showSettings(){
+    const s=load('settings',settings); settings={...settings,...s};
+    ['sound','timer','stack'].forEach(k=>{
+        const b=$(k+'-toggle');
+        if(b){b.classList.toggle('active',settings[k]);b.textContent=settings[k]?'ON':'OFF';}
+    });
+    showModal('settings-modal');
+}
+function toggleSetting(k){
+    settings[k]=!settings[k];
+    const b=$(k+'-toggle');
+    if(b){b.classList.toggle('active',settings[k]);b.textContent=settings[k]?'ON':'OFF';}
+    save('settings',settings);
+}
+function showLeaderboard(){
+    const list=$('leaderboard-list');if(!list) return;
+    const s=load('stats',{g:0,w:0,x:0,l:1});
+    list.innerHTML=`
+        <div class="leaderboard-item"><span class="leaderboard-rank">G</span><span class="leaderboard-name">Games</span><span class="leaderboard-score">${s.g}</span></div>
+        <div class="leaderboard-item"><span class="leaderboard-rank">W</span><span class="leaderboard-name">Wins</span><span class="leaderboard-score">${s.w}</span></div>
+        <div class="leaderboard-item"><span class="leaderboard-rank">L</span><span class="leaderboard-name">Level</span><span class="leaderboard-score">${s.l}</span></div>
+        <div class="leaderboard-item"><span class="leaderboard-rank">XP</span><span class="leaderboard-name">Experience</span><span class="leaderboard-score">${s.xp}/${s.l*300}</span></div>
+    `;
+    showModal('leaderboard-modal');
+}
+function setPlayerCount(n){
+    lobbyCount=n;
+    document.querySelectorAll('.count-btn').forEach(b=>b.classList.toggle('active',parseInt(b.textContent)===n));
+}
+function updateMenuProfile(){
+    const name=load('name','Player');
+    const el=$('menu-player-name'); if(el) el.textContent=name;
+    const av=$('menu-avatar'); if(av) av.textContent=name[0]||'P';
+    const lv=$('player-level'); if(lv) lv.textContent=load('stats',{l:1}).l;
+    const xf=$('xp-fill');
+    const st=load('stats',{l:1,x:0});
+    if(xf) xf.style.width=Math.min(st.x/(st.l*300)*100,100)+'%';
+}
+function copyCode(){
+    navigator.clipboard?.writeText(roomCode);
+    toast('Copied!');
 }
 
-// ===== KEYBOARD SHORTCUTS =====
-document.addEventListener('keydown', (e) => {
-  if (!gameState || gameState.gameOver) return;
+// ===== FIREBASE =====
+function initFirebase() {
+    try{
+        if(typeof firebase==='undefined'||!db) return;
+        if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        db=firebase.database();
+        roomRef=db.ref('rooms/'+roomCode);
+        // Host writes room data
+        if(isHost){
+            roomRef.set({
+                code:roomCode, mode, status:'waiting',
+                maxPlayers:lobbyCount, settings,
+                createdAt:firebase.database.ServerValue.TIMESTAMP
+            });
+            roomRef.child('players').on('child_added',snap=>{
+                renderLobby();
+            });
+            roomRef.child('players').on('child_removed',snap=>{
+                renderLobby();
+            });
+            roomRef.child('startSignal').on('value',()=>{
+                startFromLobby();
+            });
+        } else {
+            // Joiner listens
+            lobbySub=roomRef.on('value',snap=>{
+                const d=snap.val;
+                if(!d) return;
+                if(d.gameOver){
+                    // Load game state from Firebase
+                    roomRef.child('state').once('value',s=>{
+                        if(!s) return;
+                        G=s.state;
+                        me=G.players.find(p=>!p.bot);
+                        showScreen('game-screen');
+                        renderAll(); startTimer();
+                    });
+                    return;
+                }
+                if(d.started&&!G){
+                    roomRef.child('state').once('value',s=>{
+                        if(!s) return;
+                        G=s.state;
+                        me=G.players.find(p=>!p.bot);
+                        showScreen('game-screen');
+                        renderAll(); startTimer();
+                    });
+                }
+                if(d.players) renderLobby();
+            });
+        }
+        console.log('Firebase ready');
+    }catch(e){console.log('Firebase offline mode');}
+}
 
-  const human = gameState.players.find(p => !p.isBot);
-  if (!human || gameState.players[gameState.currentIndex].id !== human.id) return;
+// ===== INIT =====
+function init() {
+    // Particles
+    const pc=$('particles');
+    if(pc) for(let i=0;i<18;i++){
+        const p=document.createElement('div');
+        p.className='particle';
+        p.style.left=Math.random()*100+'%';
+        p.style.top=Math.random()*100+'%';
+        p.style.background=['#E63946','#457BF5','#2DC66B','#F5C542'][0|Math.random()*4];
+        p.style.animationDelay=Math.random()*18+'s';
+        p.style.animationDuration=(14+Math.random()*8)+'s';
+        pc.appendChild(p);
+    }
 
-  switch(e.key) {
-    case 'd':
-    case 'D':
-      drawCard();
-      break;
-    case 'u':
-    case 'U':
-      callUno();
-      break;
-    case '1': case '2': case '3': case '4': case '5':
-    case '6': case '7': case '8': case '9':
-      const idx = parseInt(e.key) - 1;
-      const hand = gameState.hands[human.id];
-      if (hand && hand[idx]) handleCardClick(hand[idx]);
-      break;
-  }
-});
+    // Load saved
+    updateMenuProfile();
+    selectMode(load('mode','classic'));
 
-// ===== START =====
-document.addEventListener('DOMContentLoaded', initApp);
+    // Loading animation
+    let prog=0;
+    const bar=$('loading-progress'), txt=$('loading-text');
+    const msgs=['Shuffling...','Dealing...','Ready!'];
+    const iv=setInterval(()=>{
+        prog+=Math.random()*30+15;
+        if(prog>=100){
+            prog=100;clearInterval(iv);
+            if(bar) bar.style.width='100%';
+            if(txt) txt.textContent=msgs[2];
+            setTimeout(()=>showScreen('menu-screen'),350);
+        } else {
+            if(bar) bar.style.width=prog+'%';
+            if(txt) txt.textContent=msgs[Math.min(Math.floor(prog/35),1)];
+        }
+    },180);
+
+    // Audio
+    document.addEventListener('click',initAudio,{once:true});
+    document.addEventListener('touchstart',initAudio,{once:true});
+
+    // Firebase
+    try{
+        if(typeof firebase!=='undefined'&&!firebase.apps.length){
+            firebase.initializeApp(FIREBASE_CONFIG);
+            db=firebase.database();
+            console.log('Firebase initialized');
+        }
+    }catch(e){console.log('Firebase not available');}
+
+    // Keyboard
+    document.addEventListener('keydown',e=>{
+        if(!G||G.over) return;
+        if(G.players[G.cur].id!==me.id) return;
+        if(e.key==='d'||e.key==='D') handleDraw();
+        else if(e.key==='u'||e.key==='U') callUno();
+        else if(e.key>='0'&&e.key<='9'){
+            const h=G.hands[me.id];
+            const idx=parseInt(e.key)-1;
+            if(h&&h[idx]) handlePlay(h[idx]);
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded',init);
